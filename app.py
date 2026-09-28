@@ -11,7 +11,7 @@ Description : A small FastAPI service for learning OpenTelemetry (OTEL) end to e
 
 Author      : dcodev1702 & M365 Copilot / Cowork
 Created     : 2026-09-28
-Version     : 0.2.0
+Version     : 0.2.1
 Python      : 3.11+
 Run (local) : uvicorn app:app --reload                                  -> http://127.0.0.1:8000/docs
 Run (Docker): docker compose up --build                                 -> http://localhost:8000/docs
@@ -83,7 +83,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 from pydantic import BaseModel, ConfigDict, Field
 
 SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "foundry-learn-agent")
-SERVICE_VERSION = "0.2.0"
+SERVICE_VERSION = "0.2.1"
 
 # =============================================================================
 # 1. OPENTELEMETRY SETUP
@@ -244,7 +244,7 @@ class McpClient:
 # =============================================================================
 # 3. THE AGENT - prompts, output contract, and two ways to run the tool loop
 # =============================================================================
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-sol")
 MAX_TURNS = 8  # safety valve so a confused model cannot loop (and bill you) forever
 
 SYSTEM_PROMPT = """\

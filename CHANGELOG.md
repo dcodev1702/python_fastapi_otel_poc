@@ -7,7 +7,10 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
-Documentation, repository setup and port publishing; `app.py` is unchanged, so the version stays 0.2.0.
+## [0.2.1] - 2026-09-28
+
+Fixes the default model and stops publishing ports on every interface. Also adds the documentation and repository
+setup done since 0.2.0.
 
 ### Added
 
@@ -35,6 +38,13 @@ Documentation, repository setup and port publishing; `app.py` is unchanged, so t
 - `design.md` §2: the diagram replaces the ASCII architecture drawing.
 - The file tables in `design.md` §3 and the README list the new files.
 
+### Fixed
+
+- The default model `gpt-5.6-luna` isn't available to the maintainer's OpenAI project, so `/ask` and
+  `/ask-hosted` failed with `502` (`403 model_not_found`). The default in `app.py` and `.env.example` is now
+  `gpt-5.6-sol`, and both endpoints return 200 with it. To use another model, set `OPENAI_MODEL` in `.env`; the
+  README's troubleshooting table shows how to list the models your key can use.
+
 ### Security
 
 - Ports are published on IPv4 `127.0.0.1` only, plus `LAN_IP` when `.env` sets it; never on `0.0.0.0` or IPv6.
@@ -61,4 +71,5 @@ Initial version, written offline; `design.md` §6 lists the external contracts t
   - the `compose.jaeger.yaml` override that adds Jaeger.
 - `README.md`, a walkthrough, and `design.md`, the design notes and verification checklist.
 
-[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/commits/main
+[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/dcodev1702/python_fastapi_otel_poc/releases/tag/v0.2.1
