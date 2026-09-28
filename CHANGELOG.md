@@ -7,6 +7,8 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-09-28
+
 ### Added
 
 - `.vscode/settings.json`, which points Pylint and the Python extension at `${workspaceFolder}/.venv/bin/python`.
@@ -18,6 +20,9 @@ only when the application's behaviour changes (`design.md` §0).
 
 ### Changed
 
+- The default model is `gpt-5.6-luna` again, in `app.py`, `.env.example` and the docs. The maintainer's OpenAI
+  project now has access to it, and `/ask` and `/ask-hosted` both return 200 with it.
+- Jaeger's memory limit in `compose.jaeger.yaml` is 2 GB, up from 1 GB, so it can hold more traces in memory.
 - The docs and the diagram list the Microsoft Learn MCP server's third tool, `microsoft_code_sample_search`
   (`query`, optional `language`). `GET /tools` now returns it alongside `microsoft_docs_search` and
   `microsoft_docs_fetch` (see the README's `/tools` step, `design.md` L2 and acceptance test 3). The agent already
@@ -115,7 +120,8 @@ Initial version, written offline; `design.md` §6 lists the external contracts t
   - the `compose.jaeger.yaml` override that adds Jaeger.
 - `README.md`, a walkthrough, and `design.md`, the design notes and verification checklist.
 
-[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/dcodev1702/python_fastapi_otel_poc/releases/tag/v0.2.1

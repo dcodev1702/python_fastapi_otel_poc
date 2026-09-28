@@ -5,7 +5,7 @@
 | **Project** | Foundry Learn Agent — FastAPI + OpenTelemetry learning service with an LLM agent that uses the Microsoft Learn MCP server |
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
-| **Version** | 0.2.3 |
+| **Version** | 0.2.4 |
 | **Audience** | (1) the human maintainer; (2) a GenAI assistant **with internet access** that will finish verification |
 
 ---
@@ -111,8 +111,8 @@ Resource: `service.name` (from `OTEL_SERVICE_NAME`, default `foundry-learn-agent
 ### `stats` snapshot (heartbeat line and `/healthz` body)
 
 ```json
-{"status":"ok","service":"foundry-learn-agent","version":"0.2.3","time":"<UTC ISO>","uptime_s":0,
- "exporter":"console|otlp[+azure-monitor]","model":"gpt-5.6-sol","rss_mb":25.6,
+{"status":"ok","service":"foundry-learn-agent","version":"0.2.4","time":"<UTC ISO>","uptime_s":0,
+ "exporter":"console|otlp[+azure-monitor]","model":"gpt-5.6-luna","rss_mb":25.6,
  "requests":{"/path":n},"errors":{"/path":n},"llm_turns":0,"tool_calls":0,
  "tokens":{"input_tokens":0,"output_tokens":0}}
 ```
@@ -124,7 +124,7 @@ Nothing in this path may perform I/O that would create a span.
 | Variable | Default | Read in |
 |---|---|---|
 | `OPENAI_API_KEY` | required | `lifespan` (fail fast) + OpenAI SDK |
-| `OPENAI_MODEL` | `gpt-5.6-sol` | `app.py` §3 `OPENAI_MODEL` |
+| `OPENAI_MODEL` | `gpt-5.6-luna` | `app.py` §3 `OPENAI_MODEL` |
 | `OTEL_SERVICE_NAME` | `foundry-learn-agent` | `SERVICE_NAME` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset → console | `configure_opentelemetry()` |
 | `OTEL_PYTHON_FASTAPI_EXCLUDED_URLS` | `docs,openapi.json,redoc,healthz` | `EXCLUDED_URLS` |
@@ -169,7 +169,7 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 
 | # | Assumed | Where | Verify | If wrong |
 |---|---|---|---|---|
-| O1 | Model id **`gpt-5.6-sol`** is available to the maintainer's project and supports function calling, structured outputs (`json_schema`, `strict: true`) and the hosted MCP tool. **Verified 2026-09-28:** the original default `gpt-5.6-luna` is not available to that project (403 `model_not_found`); with `gpt-5.6-sol`, `POST /ask` and `POST /ask-hosted` both return 200. | `app.py` §3 `OPENAI_MODEL`; `.env.example`; `design.md` §4 | `GET /v1/models` (see the README troubleshooting table) | Change the default in `OPENAI_MODEL` and `.env.example` to a model that supports all three. |
+| O1 | Model id **`gpt-5.6-luna`** is available to the maintainer's project and supports function calling, structured outputs (`json_schema`, `strict: true`) and the hosted MCP tool. **Verified 2026-09-28:** at first the project could not use `gpt-5.6-luna` (403 `model_not_found`), so 0.2.1–0.2.3 defaulted to `gpt-5.6-sol`. Once the project had access, `POST /ask` and `POST /ask-hosted` both returned 200 on `gpt-5.6-luna`, and it is the default again from 0.2.4. | `app.py` §3 `OPENAI_MODEL`; `.env.example`; `design.md` §4 | `GET /v1/models` (see the README troubleshooting table) | Change the default in `OPENAI_MODEL` and `.env.example` to a model that supports all three. |
 | O2 | Responses API **function tool** shape `{"type":"function","name","description","parameters","strict"}` at the top level (not nested under `"function"`). | `to_openai_tools()` | Responses API reference → tools | Adjust the dict shape. |
 | O3 | Tool-call output items have `type == "function_call"` with `.name`, `.arguments` (JSON string), `.call_id`; results are fed back as `{"type":"function_call_output","call_id","output"}`; prior output items can be appended verbatim to `input`. | `run_agent()` | Responses API function-calling guide | Adjust item access / input construction. |
 | O4 | Structured outputs are passed as `text={"format":{"type":"json_schema","name","strict":true,"schema"}}`; final text is `response.output_text`; usage is `response.usage.input_tokens/.output_tokens`. | `BRIEF_TEXT_FORMAT`, `record_usage()` | Responses API structured-outputs guide | Adjust parameter path / attribute names. |

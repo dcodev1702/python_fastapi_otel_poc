@@ -4,7 +4,7 @@
 |---|---|
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
-| **Version** | 0.2.3 |
+| **Version** | 0.2.4 |
 | **Runs on** | Python 3.11+ locally, or Docker Compose on Linux (container capped at 3 GB RAM) |
 
 A small, runnable service for learning how OpenTelemetry (OTEL) tracing works in a Python API that drives an
@@ -110,7 +110,7 @@ docker compose -f compose.yaml -f compose.jaeger.yaml up --build
 Open <http://localhost:16686>, choose the service `foundry-learn-agent`, and either browse traces or paste a
 `trace_id` from an API response into the search box. The waterfall makes parent/child nesting and where the
 time goes (LLM turns dominate) obvious in a way the console never will. The override file does two things:
-adds the Jaeger container (own 1 GB cap) and sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` on the API —
+adds the Jaeger container (own 2 GB cap) and sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` on the API —
 `app.py` is untouched.
 
 ## Run it locally instead (venv)
@@ -139,7 +139,7 @@ All optional; set in `.env` (Docker) or export in your shell (local).
 | Variable | Default | Effect |
 |---|---|---|
 | `OPENAI_API_KEY` | **required** | the app refuses to start without it |
-| `OPENAI_MODEL` | `gpt-5.6-sol` | any model with function calling, structured outputs and the hosted MCP tool |
+| `OPENAI_MODEL` | `gpt-5.6-luna` | any model with function calling, structured outputs and the hosted MCP tool |
 | `OTEL_SERVICE_NAME` | `foundry-learn-agent` | `service.name` stamped on every span |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset → console | set to ship spans over OTLP/HTTP (Jaeger, a Collector, Aspire Dashboard) |
 | `HEALTHZ_INTERVAL_SECONDS` | `60` | how often the `[healthz]` line is printed; `0` disables it |
@@ -185,8 +185,8 @@ calls, OpenAI did. In Jaeger the trace collapses to `agent.run → llm.turn → 
 **6. Watch the heartbeat.** Every 60 s the log shows one line like
 
 ```
-[healthz] {"status": "ok", "service": "foundry-learn-agent", "version": "0.2.3", "time": "...", "uptime_s": 420,
-           "exporter": "console", "model": "gpt-5.6-sol", "rss_mb": 96.4,
+[healthz] {"status": "ok", "service": "foundry-learn-agent", "version": "0.2.4", "time": "...", "uptime_s": 420,
+           "exporter": "console", "model": "gpt-5.6-luna", "rss_mb": 96.4,
            "requests": {"/healthz": 7, "/ping": 1, "/tools": 2, "/ask": 1, "/ask-hosted": 1}, "errors": {},
            "llm_turns": 4, "tool_calls": 5, "tokens": {"input_tokens": 18342, "output_tokens": 1210}}
 ```

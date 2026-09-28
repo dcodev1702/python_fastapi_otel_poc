@@ -30,5 +30,5 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g                                      # Jaeger keeps traces in memory; 1 GB is plenty for learning
+          memory: 2g                                      # Jaeger keeps traces in memory; 2 GB is plenty for learning
     restart: unless-stopped
