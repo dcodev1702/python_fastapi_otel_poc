@@ -69,6 +69,7 @@ CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI respo
 | `compose.jaeger.yaml` | Override: adds Jaeger all-in-one (UI on `127.0.0.1` + `LAN_IP`, OTLP/HTTP on `127.0.0.1` only), sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` | `docker compose -f compose.yaml -f compose.jaeger.yaml up --build` |
 | `.env.example` | Template for `.env` (`OPENAI_API_KEY`, optional knobs) | `.env` is git- and docker-ignored |
 | `.dockerignore`, `.gitignore` | Keep `.env` out of the image and the repo | |
+| `.vscode/settings.json` | Editor only: Pylint and the Python extension use `${workspaceFolder}/.venv/bin/python` | Without `.venv`, VS Code flags every third-party import as unresolved |
 | `README.md` | User-facing guide: setup, walkthrough, exercises, troubleshooting | Depends on the contracts in §4–§5 |
 | `design.md` | This document | |
 | `CHANGELOG.md` | Notable changes, version by version | Keep a Changelog format; the version bumps only with behaviour (§0) |

@@ -54,6 +54,7 @@ Where each piece runs and what talks to what; the numbered flows are explained i
 | `LICENSE` | MIT License |
 | `images/foundry-learn-agent-architecture-dark.svg` | The architecture diagram above (also in `design.md` §2) |
 | `.dockerignore`, `.gitignore` | Keep `.env` out of the image and the repo |
+| `.vscode/settings.json` | Points Pylint and the Python extension at `.venv` (see *Run it locally instead*) |
 
 ## Prerequisites
 
@@ -126,9 +127,9 @@ pass this machine's LAN address, never `--host 0.0.0.0`. To use Jaeger from a lo
 (`docker compose -f compose.yaml -f compose.jaeger.yaml up jaeger`) and `export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`
 before starting uvicorn.
 
-**Editing in VS Code?** Select `.venv/bin/python` as the interpreter (**Python: Select Interpreter**) even if you
-only run the app in Docker. Otherwise Pylint and Pylance check `app.py` against a Python without these packages
-and flag every third-party import as unresolved.
+**Editing in VS Code?** Create the `.venv` above even if you only run the app in Docker: `.vscode/settings.json`
+points Pylint and the Python extension at `.venv/bin/python`. Without it they check `app.py` against a Python that
+lacks these packages and flag every third-party import as unresolved.
 
 ## Configuration
 

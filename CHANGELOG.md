@@ -7,6 +7,12 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
+### Added
+
+- `.vscode/settings.json`, which points Pylint and the Python extension at `${workspaceFolder}/.venv/bin/python`.
+  Once you create the README's `.venv`, VS Code resolves the project's imports and stops reporting them as
+  unresolved.
+
 ### Changed
 
 - The docs and the diagram list the Microsoft Learn MCP server's third tool, `microsoft_code_sample_search`
@@ -14,8 +20,7 @@ only when the application's behaviour changes (`design.md` §0).
   `microsoft_docs_fetch` (see the README's `/tools` step, `design.md` L2 and acceptance test 3). The agent already
   offers the model every listed tool, so its code and prompts are unchanged.
 - `lifespan(app)` carries a targeted `# pylint: disable=redefined-outer-name`: it is FastAPI's documented signature,
-  and the parameter is the module's own `app`. The README's local-run section explains the other false positives:
-  in VS Code, select the `.venv` interpreter, or Pylint reports every third-party import as unresolved.
+  and the parameter is the module's own `app`.
 
 ## [0.2.3] - 2026-09-28
 
