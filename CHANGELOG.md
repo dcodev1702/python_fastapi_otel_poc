@@ -7,7 +7,7 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
-Documentation and repository setup; the application's behaviour is unchanged, so the version stays 0.2.0.
+Documentation, repository setup and port publishing; `app.py` is unchanged, so the version stays 0.2.0.
 
 ### Added
 
@@ -24,15 +24,23 @@ Documentation and repository setup; the application's behaviour is unchanged, so
 - An **Architecture** section in the README that embeds the diagram.
 - `.env.example`, the template that the README and `design.md` tell you to copy to `.env`; it was missing. It
   holds an empty `OPENAI_API_KEY` and the optional settings, commented out with their defaults.
-- A README troubleshooting entry for `ERR_CONNECTION_REFUSED` on `localhost:8000` when the browser runs on a
-  different machine from Docker (for example VS Code Remote-SSH).
+- README troubleshooting entries for `ERR_CONNECTION_REFUSED` from another machine and for a `LAN_IP` that is no
+  longer this host's address.
 - `LICENSE`: the MIT License, copyright 2026 DCODEV1702.
+- `LAN_IP` in `.env`: also publishes the API and the Jaeger UI on that IPv4 LAN address.
 - This changelog.
 
 ### Changed
 
 - `design.md` §2: the diagram replaces the ASCII architecture drawing.
 - The file tables in `design.md` §3 and the README list the new files.
+
+### Security
+
+- Ports are published on IPv4 `127.0.0.1` only, plus `LAN_IP` when `.env` sets it; never on `0.0.0.0` or IPv6.
+  They used to be published on every interface, IPv6 included, so anything that could reach the host could call
+  `/ask` and spend your OpenAI tokens, read traces in the Jaeger UI or send spans to OTLP. OTLP/HTTP (4318) stays
+  on `127.0.0.1` even when `LAN_IP` is set.
 
 ## [0.2.0] - 2026-09-28
 

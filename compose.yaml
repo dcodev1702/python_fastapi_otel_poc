@@ -11,6 +11,9 @@
 # Jaeger mode - spans are shipped to a Jaeger UI at http://localhost:16686 (adds compose.jaeger.yaml on top):
 #   docker compose -f compose.yaml -f compose.jaeger.yaml up --build
 #
+# Ports are published on IPv4 only - 127.0.0.1, plus this host's LAN address when .env sets LAN_IP - never on
+# 0.0.0.0 or IPv6, so nothing outside your LAN can connect (as long as your router does not forward them).
+#
 # Stop everything:  docker compose down          (add -v to drop volumes, --rmi local to drop the image)
 # =============================================================================
 name: foundry-learn-agent
@@ -22,8 +25,9 @@ services:
       dockerfile: Dockerfile
     image: foundry-learn-agent:0.2.0
     container_name: foundry-learn-agent
-    ports:
-      - "8000:8000"
+    ports:                                      # IPv4 only - never 0.0.0.0 or IPv6: /ask spends your OpenAI tokens
+      - "127.0.0.1:8000:8000"                   # this host
+      - "${LAN_IP:-127.0.0.1}:8000:8000"        # your LAN, when .env sets LAN_IP (unset: same as the line above)
     env_file:
       - .env                                    # OPENAI_API_KEY (and optional overrides) live here, never in this file
     environment:

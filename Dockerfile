@@ -6,7 +6,7 @@
 #
 # Build & run through compose (see compose.yaml); direct use for reference:
 #   docker build -t foundry-learn-agent:0.2.0 .
-#   docker run --rm -p 8000:8000 --env-file .env --memory 3g foundry-learn-agent:0.2.0
+#   docker run --rm -p 127.0.0.1:8000:8000 --env-file .env --memory 3g foundry-learn-agent:0.2.0
 # =============================================================================
 FROM python:3.12-slim
 
@@ -43,5 +43,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=60s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status == 200 else 1)"
 
-# No --reload in a container; bind to all interfaces so Docker can publish the port.
+# No --reload in a container. 0.0.0.0 means the container's own interfaces, which Docker needs to publish the
+# port; the host side is decided by the -p / ports: mapping, which this project keeps on IPv4 127.0.0.1 (plus
+# LAN_IP, if set).
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

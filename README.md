@@ -91,6 +91,14 @@ the kernel kills it and Compose restarts it (`restart: unless-stopped`). The hea
 watch actual usage — this app idles far below 200 MB, so the cap is a safety net, not a constraint. Swap is not
 counted; uncomment `memswap_limit` in `compose.yaml` if you want memory + swap capped at 3 GB together.
 
+**Who can connect.** Docker publishes the ports on IPv4 `127.0.0.1` only (never on `0.0.0.0`, never on IPv6), so
+by default only this host can call the API, and `/ask` spends your OpenAI tokens. To use it from the other machines
+on your LAN, set `LAN_IP` in `.env` to this host's IPv4 LAN address (`hostname -I` lists it) and run
+`docker compose up -d` again. The API (8000) and the Jaeger UI (16686) are then published on that address too;
+OTLP (4318) stays local. Keep `LAN_IP` a private address and don't forward these ports on your router. Without
+`LAN_IP`, reach the API from another machine through an SSH tunnel (the VS Code **Ports** view, or
+`ssh -L 8000:localhost:8000 -L 16686:localhost:16686 <host>`).
+
 ### With a Jaeger UI (recommended once the console makes sense)
 
 ```bash
@@ -113,7 +121,8 @@ export OPENAI_API_KEY=sk-...
 uvicorn app:app --reload
 ```
 
-Open <http://127.0.0.1:8000/docs>. To use Jaeger from a local run, start only Jaeger from the override file
+Open <http://127.0.0.1:8000/docs>. uvicorn listens on `127.0.0.1` only unless you pass `--host`; to allow your LAN,
+pass this machine's LAN address, never `--host 0.0.0.0`. To use Jaeger from a local run, start only Jaeger from the override file
 (`docker compose -f compose.yaml -f compose.jaeger.yaml up jaeger`) and `export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`
 before starting uvicorn.
 
@@ -132,6 +141,7 @@ All optional; set in `.env` (Docker) or export in your shell (local).
 | `OTEL_BSP_SCHEDULE_DELAY` | `5000` | ms between span flushes; `1000` makes the console feel snappier |
 | `OTEL_SEMCONV_STABILITY_OPT_IN` | unset | `http` switches auto spans to the newer attribute names |
 | `LEARN_MCP_URL` | `https://learn.microsoft.com/api/mcp` | another MCP server to experiment with (must be public for `/ask-hosted`) |
+| `LAN_IP` | unset → `127.0.0.1` only | Docker Compose only: also publish the API and the Jaeger UI on this IPv4 LAN address |
 
 ## Try it — in this order
 
@@ -296,5 +306,6 @@ Both live at the top of section 3 in `app.py`.
 | Jaeger shows no service | you started with `compose.yaml` only — add `-f compose.jaeger.yaml`; or check `docker compose logs api` for exporter connection errors |
 | `WARNING: Your kernel does not support memory limit capabilities` | the host kernel has the memory cgroup disabled; the app runs but the 3 GB cap is not enforced |
 | `pip` dependency conflict | the OTEL packages must stay in lockstep (core `1.N` ↔ contrib `0.(N+21)b0`); do not pin one without the others |
-| Port 8000 already in use | change the left side of `"8000:8000"` in `compose.yaml` |
-| Browser shows `ERR_CONNECTION_REFUSED` for `localhost:8000` although `docker compose ps` says healthy | the browser runs on a different machine from Docker (for example VS Code Remote-SSH), so `localhost` is your own machine: forward ports 8000 and 16686 in the VS Code **Ports** view, or browse to the Docker host's LAN address — `compose.yaml` publishes the ports on all interfaces |
+| Port 8000 already in use | change the host port: the middle number in both `…:8000:8000` lines of `compose.yaml` |
+| Another machine gets `ERR_CONNECTION_REFUSED` on port 8000 although `docker compose ps` says healthy | the ports are published on `127.0.0.1` only: set `LAN_IP` in `.env` and run `docker compose up -d` again, or tunnel over SSH (VS Code **Ports** view, or `ssh -L 8000:localhost:8000 <host>`). `localhost` in a browser on another machine means that machine |
+| `docker compose up` fails with `cannot assign requested address` | `LAN_IP` is no longer an address of this host (did DHCP hand out a new one?): update `LAN_IP`, or reserve the address on your router |

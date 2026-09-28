@@ -23,9 +23,10 @@ services:
   jaeger:
     image: jaegertracing/jaeger:latest                    # Jaeger v2 all-in-one: OTLP receivers on 4317 (gRPC) and 4318 (HTTP)
     container_name: foundry-jaeger
-    ports:
-      - "16686:16686"                                     # Jaeger UI
-      - "4318:4318"                                       # OTLP/HTTP, published so `uvicorn` on the host can send too
+    ports:                                                # IPv4 only, like the API in compose.yaml
+      - "127.0.0.1:16686:16686"                           # Jaeger UI - every span attribute, tool arguments included
+      - "${LAN_IP:-127.0.0.1}:16686:16686"                # ...also on your LAN when .env sets LAN_IP
+      - "127.0.0.1:4318:4318"                             # OTLP/HTTP, so `uvicorn` on this host can send; never on the LAN
     deploy:
       resources:
         limits:

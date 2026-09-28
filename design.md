@@ -28,6 +28,8 @@ Your job:
    (`SERVICE_VERSION`), `compose.yaml` (image tag) and this file together if you change behaviour.
 5. Do **not** add security hardening, auth, rate limiting or secret scrubbing — this is an intro learning
    project by explicit request. Do not remove the commented-out Step 4 block; it is meant to stay commented.
+   The one exception, requested by the maintainer: the compose files publish ports on IPv4 `127.0.0.1` and,
+   when `.env` sets `LAN_IP`, on that LAN address — never on `0.0.0.0` or IPv6 (§5, decision 10). Keep it.
 6. Report back in three lists: *verified as-is*, *changed (file:symbol, before → after, source URL)*,
    *could not verify*.
 
@@ -63,8 +65,8 @@ CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI respo
 | `app.py` | Entire application, 5 numbered sections | §1 OTEL setup (+ Step 4 commented), §2 MCP client, §3 agent, §4 health/`stats`, §5 API |
 | `requirements.txt` | Dependencies as **floors** | pip resolves newest compatible set at build; OTEL family lockstep enforced by pip |
 | `Dockerfile` | `python:3.12-slim`, non-root, pip upgraded before install, HEALTHCHECK on `/healthz` | `PYTHONUNBUFFERED=1` so spans + heartbeat reach `docker compose logs` |
-| `compose.yaml` | Console mode; `deploy.resources.limits.memory: 3g` | Linux host, Compose v2 |
-| `compose.jaeger.yaml` | Override: adds Jaeger all-in-one, sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` | `docker compose -f compose.yaml -f compose.jaeger.yaml up --build` |
+| `compose.yaml` | Console mode; API on `127.0.0.1:8000` (+ `LAN_IP`); `deploy.resources.limits.memory: 3g` | Linux host, Compose v2 |
+| `compose.jaeger.yaml` | Override: adds Jaeger all-in-one (UI on `127.0.0.1` + `LAN_IP`, OTLP/HTTP on `127.0.0.1` only), sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` | `docker compose -f compose.yaml -f compose.jaeger.yaml up --build` |
 | `.env.example` | Template for `.env` (`OPENAI_API_KEY`, optional knobs) | `.env` is git- and docker-ignored |
 | `.dockerignore`, `.gitignore` | Keep `.env` out of the image and the repo | |
 | `README.md` | User-facing guide: setup, walkthrough, exercises, troubleshooting | Depends on the contracts in §4–§5 |
@@ -128,6 +130,7 @@ Nothing in this path may perform I/O that would create a span.
 | `LEARN_MCP_URL` | `https://learn.microsoft.com/api/mcp` | `LEARN_MCP_URL` (also used by `HOSTED_MCP_TOOL`) |
 | `OTEL_BSP_SCHEDULE_DELAY`, `OTEL_SEMCONV_STABILITY_OPT_IN` | SDK defaults | read by the SDK/instrumentation, not by app code |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | unset | Step 4 block only (commented) |
+| `LAN_IP` | unset → `127.0.0.1` only | Docker Compose port publishing in `compose*.yaml`, not app code |
 
 ## 5. Design decisions (and why)
 
@@ -148,6 +151,12 @@ Nothing in this path may perform I/O that would create a span.
 8. **Compose override file for Jaeger** rather than profiles, so one command both starts Jaeger and points the
    exporter at it (no half-configured state where the exporter targets a Jaeger that is not running).
 9. **`MAX_TURNS = 8`** bounds cost if the model loops.
+10. **Ports are published on IPv4 `127.0.0.1`, plus `LAN_IP` when set — never on `0.0.0.0` or IPv6.** `/ask` and
+    `/ask-hosted` spend OpenAI tokens, the Jaeger UI shows every span attribute (tool arguments included) and
+    OTLP accepts spans from anyone, so none of them may be reachable from the Internet. An explicit IPv4 host
+    address also stops Docker from publishing on `[::]`, and Compose merges the two identical mappings when
+    `LAN_IP` is unset. Inside the container uvicorn still listens on `0.0.0.0`: that is the container's own
+    network namespace, which Docker needs in order to publish the port.
 
 ## 6. VERIFICATION CHECKLIST — assumptions made without internet access
 
@@ -257,6 +266,11 @@ docker stats --no-stream foundry-learn-agent
 docker compose down && docker compose -f compose.yaml -f compose.jaeger.yaml up --build -d
 #    repeat steps 4 and 5, then open http://localhost:16686 -> service foundry-learn-agent -> compare the two traces
 #    EXPECT: /ask trace has many child spans (mcp ..., llm.turn, POST); /ask-hosted trace has agent.run -> llm.turn -> one POST
+
+# 8. Who can connect (Jaeger mode still running)
+ss -ltn | grep -E ':(8000|16686|4318) '
+#    EXPECT: 127.0.0.1 for all three, plus the LAN_IP address for 8000 and 16686 when .env sets it;
+#            never 0.0.0.0, [::] or any other address
 ```
 
 ## 8. What was verified offline (already done — do not repeat)
