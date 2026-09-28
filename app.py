@@ -110,6 +110,7 @@ def configure_opentelemetry() -> str:
         # Ship spans to Jaeger / an OTel Collector / the Aspire Dashboard over OTLP-HTTP, e.g.
         #   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318          (uvicorn on your machine)
         #   OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318             (inside docker compose)
+        # pylint: disable-next=import-outside-toplevel  # only OTLP mode needs it, like the Step 4 exporter below
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
         provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))  # reads the env var, appends /v1/traces
@@ -185,6 +186,7 @@ class McpClient:
         self._session_id: str | None = None
 
     async def initialize(self) -> None:
+        """Open the MCP session: `initialize`, then the `notifications/initialized` notification."""
         await self._rpc(
             "initialize",
             {
@@ -196,9 +198,11 @@ class McpClient:
         await self._rpc("notifications/initialized", notification=True)
 
     async def list_tools(self) -> list[dict[str, Any]]:
+        """Return the server's tool definitions: name, description and `inputSchema` (JSON Schema)."""
         return (await self._rpc("tools/list"))["tools"]
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
+        """Run one tool and return its text content blocks joined into one string."""
         result = await self._rpc("tools/call", {"name": name, "arguments": arguments})
         # Tool results are a list of content blocks; we only need the text ones.
         return "\n".join(block.get("text", "") for block in result.get("content", []) if block.get("type") == "text")
@@ -284,7 +288,7 @@ Then give me {links} link(s) to the most relevant official Microsoft Learn pages
 AgentMode = Literal["local-tools", "hosted-mcp"]
 
 
-class Link(BaseModel):
+class Link(BaseModel):  # pylint: disable=missing-class-docstring  # a docstring would join the schema sent to OpenAI
     model_config = ConfigDict(extra="forbid")  # -> additionalProperties:false, which OpenAI strict mode requires
     title: str
     url: str
@@ -299,11 +303,15 @@ class Brief(BaseModel):
 
 
 class TokenUsage(BaseModel):
+    """Tokens the model consumed, from the Responses API `usage` field."""
+
     input_tokens: int = 0
     output_tokens: int = 0
 
 
 class ToolCallRecord(BaseModel):
+    """One Microsoft Learn tool call, made by the agent (/ask) or by OpenAI on its behalf (/ask-hosted)."""
+
     tool: str
     arguments: dict[str, Any]
     result_chars: int
@@ -316,6 +324,8 @@ class ToolCallRecord(BaseModel):
 
 
 class AgentResult(BaseModel):
+    """An agent run's brief plus how it was produced: LLM turns, token usage and tool calls."""
+
     mode: AgentMode
     brief: Brief
     turns: int = Field(description="How many times the LLM was called (tool-call rounds + the final answer)")
@@ -341,6 +351,7 @@ HOSTED_MCP_TOOL = {
 
 
 def build_user_prompt(topic: str, paragraphs: int, links: int) -> str:
+    """Fill USER_PROMPT_TEMPLATE with the request's topic and paragraph and link counts."""
     return USER_PROMPT_TEMPLATE.format(topic=topic, paragraphs=paragraphs, links=links)
 
 
@@ -380,7 +391,7 @@ def record_usage(span: trace.Span, response: Any, totals: TokenUsage) -> None:
     stats.tokens.output_tokens += response.usage.output_tokens
 
 
-def finish_run(
+def finish_run(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # six facts per run
     span: trace.Span, mode: AgentMode, brief: Brief, turns: int, usage: TokenUsage, records: list[ToolCallRecord]
 ) -> AgentResult:
     """Summarise the run on the agent.run span (what a dashboard would chart) and return the API-facing result."""
@@ -392,6 +403,7 @@ def finish_run(
     return AgentResult(mode=mode, brief=brief, turns=turns, usage=usage, tool_calls=records)
 
 
+# pylint: disable-next=too-many-locals  # the whole tool loop reads top to bottom on purpose
 async def run_agent(openai_client: AsyncOpenAI, mcp: McpClient, user_prompt: str) -> AgentResult:
     """LOCAL TOOLS. The whole agent is a loop: ask the model -> run the tools it asks for -> ask again -> answer.
 
@@ -512,7 +524,7 @@ async def run_agent_hosted(openai_client: AsyncOpenAI, user_prompt: str) -> Agen
 HEALTHZ_INTERVAL_SECONDS = float(os.getenv("HEALTHZ_INTERVAL_SECONDS", "60"))  # 0 disables the heartbeat
 
 
-class Stats:
+class Stats:  # pylint: disable=too-few-public-methods  # a plain bag of counters with one read method
     """Plain in-process counters. The middleware in section 5 and the agent functions above feed them."""
 
     def __init__(self) -> None:
@@ -524,6 +536,7 @@ class Stats:
         self.tokens = TokenUsage()
 
     def snapshot(self) -> dict[str, Any]:
+        """The status JSON that GET /healthz returns and the heartbeat prints."""
         return {
             "status": "ok",
             "service": SERVICE_NAME,
@@ -557,6 +570,7 @@ def current_rss_mb() -> float | None:
 
 
 def print_health() -> None:
+    """Print one `[healthz] {...}` status line to stdout."""
     print(f"[healthz] {json.dumps(stats.snapshot())}", flush=True)  # flush: reach `docker compose logs` at once
 
 
@@ -571,18 +585,24 @@ async def heartbeat() -> None:
 # 5. THE API
 # =============================================================================
 class AskRequest(BaseModel):
+    """Body of POST /ask and POST /ask-hosted: the topic, and how many paragraphs and links to write."""
+
     topic: str = Field("Microsoft Foundry", examples=["Microsoft Foundry"])
     paragraphs: int = Field(2, ge=1, le=5)
     links: int = Field(3, ge=1, le=10)
 
 
 class AskResponse(AgentResult):
+    """The agent's result plus the request's topic, the model used and the trace_id to look up."""
+
     topic: str
     model: str
     trace_id: str = Field(description="Paste this into Jaeger / your trace UI to find this exact request")
 
 
 class ToolInfo(BaseModel):
+    """One Microsoft Learn MCP tool, as GET /tools lists it."""
+
     name: str
     description: str
     parameters: dict[str, Any]
@@ -657,6 +677,7 @@ def to_http_error(exc: Exception) -> HTTPException:
 
 @app.get("/", include_in_schema=False)
 async def root() -> RedirectResponse:
+    """Send the bare URL to the Swagger UI at /docs."""
     return RedirectResponse(url="/docs")
 
 

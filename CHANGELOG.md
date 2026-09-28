@@ -24,6 +24,14 @@ only when the application's behaviour changes (`design.md` §0).
   offers the model every listed tool, so its code and prompts are unchanged.
 - `lifespan(app)` carries a targeted `# pylint: disable=redefined-outer-name`: it is FastAPI's documented signature,
   and the parameter is the module's own `app`.
+- `app.py` now scores 10.00/10 in Pylint. It gains docstrings for the MCP client methods, the helper functions and
+  five API models, which now describe those models in Swagger. Where a warning conflicts with a deliberate choice,
+  a targeted, commented disable remains:
+  - the OTLP exporter, imported only in OTLP mode;
+  - `Link`, whose docstring would join the JSON schema sent to OpenAI;
+  - `Stats`, `finish_run` and `run_agent`.
+
+  The prompts and the structured-output schema sent to OpenAI are unchanged.
 
 ## [0.2.3] - 2026-09-28
 
