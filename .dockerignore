@@ -1,0 +1,16 @@
+# Keep secrets and clutter out of the Docker build context (only requirements.txt and app.py are COPY'd anyway)
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.md
+compose*.yaml
+Dockerfile

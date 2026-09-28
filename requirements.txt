@@ -1,0 +1,25 @@
+# Foundry Learn Agent - dependencies
+# Author : dcodev1702 & M365 Copilot / Cowork   Created: 2026-09-28
+#
+# FLOORS, NOT PINS: every line names the oldest release known to work, and pip installs the newest release that
+# satisfies it at install / image-build time (the Dockerfile upgrades pip first). The OpenTelemetry family must
+# stay in lockstep - core 1.N.0 pairs with contrib 0.(N+21)b0, e.g. 1.44.0 <-> 0.65b0 - and pip enforces that
+# for you: the contrib packages pin opentelemetry-semantic-conventions to their exact matching version, so the
+# resolver can only pick a consistent set. Want a reproducible build later?  pip freeze > requirements.lock.txt
+
+# --- Web API -------------------------------------------------------------------------------------------
+fastapi>=0.115
+uvicorn[standard]>=0.30
+httpx>=0.27
+openai>=1.80                                        # Responses API: function calling, structured outputs, hosted MCP tool
+
+# --- OpenTelemetry -------------------------------------------------------------------------------------
+opentelemetry-api>=1.44.0,<2                        # the interface (tracer, spans, attributes, events)
+opentelemetry-sdk>=1.44.0,<2                        # the implementation (provider, processor, exporters)
+opentelemetry-exporter-otlp-proto-http>=1.44.0,<2   # ships spans to Jaeger / a Collector over OTLP-HTTP
+opentelemetry-instrumentation-fastapi>=0.65b0,<1    # inbound:  request -> SERVER span (root of the trace)
+opentelemetry-instrumentation-httpx>=0.65b0,<1      # outbound: httpx request -> CLIENT span + traceparent header
+
+# --- STEP 4 (optional): Azure Monitor / Application Insights ---------------------------------------------
+# Uncomment together with the Step 4 block in app.py, then set APPLICATIONINSIGHTS_CONNECTION_STRING.
+# azure-monitor-opentelemetry-exporter

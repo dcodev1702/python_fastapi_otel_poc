@@ -1,0 +1,417 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1537" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a0e1a"/><stop offset="1" stop-color="#0c1322"/></linearGradient>
+    <filter id="gviolet" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#a855f7" flood-opacity="0.45"/></filter>
+    <marker id="mviolet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#a855f7"/></marker>
+    <filter id="gcyan" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#22d3ee" flood-opacity="0.45"/></filter>
+    <marker id="mcyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#22d3ee"/></marker>
+    <filter id="gmagenta" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#ec4899" flood-opacity="0.45"/></filter>
+    <marker id="mmagenta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ec4899"/></marker>
+    <filter id="ggold" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#fbbf24" flood-opacity="0.45"/></filter>
+    <marker id="mgold" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#fbbf24"/></marker>
+    <filter id="gorange" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#fb923c" flood-opacity="0.45"/></filter>
+    <marker id="morange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#fb923c"/></marker>
+    <filter id="gblue" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#60a5fa" flood-opacity="0.45"/></filter>
+    <marker id="mblue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#60a5fa"/></marker>
+    <filter id="ggreen" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#34d399" flood-opacity="0.45"/></filter>
+    <marker id="mgreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#34d399"/></marker>
+    <filter id="gslate" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#94a3b8" flood-opacity="0.45"/></filter>
+    <marker id="mslate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#94a3b8"/></marker>
+  </defs>
+  <rect width="1400" height="1537" fill="url(#bg)"/>
+  <text x="56" y="58" font-size="30" font-weight="800" fill="#e8edf5" letter-spacing="0.5">FOUNDRY LEARN AGENT <tspan font-weight="300" fill="#9aa7ba">// Architecture</tspan></text>
+  <text x="56" y="80" font-size="12" letter-spacing="0.3" fill="#6b7689">FastAPI · uvicorn · OpenTelemetry Python SDK · Microsoft Learn MCP · OpenAI Responses API · Docker Compose · Jaeger</text>
+  <circle cx="1056" cy="50" r="5" fill="#34d399" filter="url(#ggreen)"/>
+  <text x="1070" y="54" font-size="12" fill="#aeb8c7">Console mode · default</text>
+  <text x="1070" y="69" font-size="10" fill="#5b6678">Jaeger: compose.jaeger.yaml · Step 4 commented out</text>
+  <line x1="56" y1="96" x2="1344" y2="96" stroke="#1c2740" stroke-width="1"/>
+  <rect x="40" y="112" width="1320" height="1399" rx="16" fill="#0c1322" fill-opacity="0.4" stroke="#1c2740" stroke-width="1.5"/>
+  <rect x="60" y="132" width="800" height="1254" rx="14" fill="#0b111e" fill-opacity="0.55" stroke="#1f2b44" stroke-width="1.3"/>
+  <g>
+  <rect x="750" y="144" width="94" height="20" rx="10" fill="#0e1626" stroke="#334155" stroke-width="0.9"/>
+  <text x="797" y="158" font-size="9" font-weight="700" letter-spacing="1" text-anchor="middle" fill="#cbd5e1">LINUX HOST</text>
+  <text x="740" y="158" font-size="10" text-anchor="end" fill="#6b7689">Docker Engine · Compose v2 · localhost</text>
+  </g>
+  <g>
+  <rect x="80" y="178" width="760" height="98" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#a855f7" stroke-width="1.4" filter="url(#gviolet)"/>
+  <rect x="98" y="198" width="18" height="18" rx="4" fill="#a855f7"/>
+  <text x="124" y="206" font-size="12.5" font-weight="700" fill="#e3e9f2">API CLIENT</text>
+  <text x="124" y="222" font-size="9" font-weight="700" letter-spacing="0.8" fill="#c4a5f5">SWAGGER UI · CURL · BROWSER ON THE HOST</text>
+  <line x1="96" y1="236" x2="824" y2="236" stroke="#243150" stroke-width="1"/>
+  <rect x="722" y="196" width="100" height="22" rx="11" fill="#1a1130" stroke="#7c3aed" stroke-width="0.8"/>
+  <text x="772" y="211" font-size="10" text-anchor="middle" fill="#cdb6f7">localhost:8000</text>
+  <circle cx="102" cy="254" r="2" fill="#a855f7"/>
+  <text x="112" y="258" font-size="10.5" fill="#b8c2d2">Swagger UI · localhost:8000/docs</text>
+  <circle cx="352" cy="254" r="2" fill="#a855f7"/>
+  <text x="362" y="258" font-size="10.5" fill="#b8c2d2">curl · POST /ask · POST /ask-hosted</text>
+  <circle cx="602" cy="254" r="2" fill="#a855f7"/>
+  <text x="612" y="258" font-size="10.5" fill="#b8c2d2">Jaeger UI · localhost:16686 (opt-in)</text>
+  </g>
+  <rect x="80" y="308" width="760" height="1062" rx="14" fill="#0b111e" fill-opacity="0.55" stroke="#2a3a57" stroke-width="1.3" stroke-dasharray="6 5"/>
+  <g>
+  <rect x="706" y="320" width="118" height="20" rx="10" fill="#0e1626" stroke="#334155" stroke-width="0.9"/>
+  <text x="765" y="334" font-size="9" font-weight="700" letter-spacing="1" text-anchor="middle" fill="#cbd5e1">DOCKER ENGINE</text>
+  <text x="696" y="334" font-size="10" text-anchor="end" fill="#6b7689">compose project foundry-learn-agent</text>
+  </g>
+  <rect x="96" y="352" width="728" height="771" rx="14" fill="#0b111e" fill-opacity="0.55" stroke="#1f2b44" stroke-width="1.3"/>
+  <g>
+  <rect x="593" y="364" width="215" height="20" rx="10" fill="#0e1626" stroke="#334155" stroke-width="0.9"/>
+  <text x="700.5" y="378" font-size="9" font-weight="700" letter-spacing="1" text-anchor="middle" fill="#cbd5e1">CONTAINER foundry-learn-agent</text>
+  <text x="583" y="378" font-size="10" text-anchor="end" fill="#6b7689">python:3.12-slim · non-root · 3 GB cap</text>
+  </g>
+  <g>
+  <rect x="112" y="398" width="340" height="446" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#a855f7" stroke-width="1.4" filter="url(#gviolet)"/>
+  <rect x="130" y="418" width="18" height="18" rx="4" fill="#a855f7"/>
+  <text x="156" y="426" font-size="12.5" font-weight="700" fill="#e3e9f2">FASTAPI APP</text>
+  <text x="156" y="442" font-size="9" font-weight="700" letter-spacing="0.8" fill="#c4a5f5">UVICORN :8000 · APP.PY §5</text>
+  <line x1="128" y1="456" x2="436" y2="456" stroke="#243150" stroke-width="1"/>
+  <rect x="383" y="416" width="51" height="22" rx="11" fill="#1a1130" stroke="#7c3aed" stroke-width="0.8"/>
+  <text x="408.5" y="431" font-size="10" text-anchor="middle" fill="#cdb6f7">0.2.0</text>
+  <text x="130" y="478" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">ROUTES</text>
+  <circle cx="134" cy="491" r="2" fill="#a855f7"/>
+  <text x="144" y="495" font-size="10.5" fill="#b8c2d2">GET / → 307 redirect to /docs</text>
+  <circle cx="134" cy="508" r="2" fill="#a855f7"/>
+  <text x="144" y="512" font-size="10.5" fill="#b8c2d2">GET /ping · the cheapest traced span</text>
+  <circle cx="134" cy="525" r="2" fill="#a855f7"/>
+  <text x="144" y="529" font-size="10.5" fill="#b8c2d2">GET /tools · Learn MCP only, no tokens</text>
+  <circle cx="134" cy="542" r="2" fill="#a855f7"/>
+  <text x="144" y="546" font-size="10.5" fill="#b8c2d2">GET /healthz · excluded from tracing</text>
+  <circle cx="134" cy="559" r="2" fill="#a855f7"/>
+  <text x="144" y="563" font-size="10.5" fill="#b8c2d2">POST /ask → run_agent()</text>
+  <circle cx="134" cy="576" r="2" fill="#a855f7"/>
+  <text x="144" y="580" font-size="10.5" fill="#b8c2d2">POST /ask-hosted → run_agent_hosted()</text>
+  <text x="130" y="602" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">INBOUND</text>
+  <circle cx="134" cy="615" r="2" fill="#a855f7"/>
+  <text x="144" y="619" font-size="10.5" fill="#b8c2d2">FastAPIInstrumentor.instrument_app(app)</text>
+  <circle cx="134" cy="632" r="2" fill="#a855f7"/>
+  <text x="144" y="636" font-size="10.5" fill="#b8c2d2">SERVER span per request = trace root</text>
+  <circle cx="134" cy="649" r="2" fill="#a855f7"/>
+  <text x="144" y="653" font-size="10.5" fill="#b8c2d2">excluded: docs, openapi.json, redoc, healthz</text>
+  <text x="130" y="675" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">MIDDLEWARE</text>
+  <circle cx="134" cy="688" r="2" fill="#a855f7"/>
+  <text x="144" y="692" font-size="10.5" fill="#b8c2d2">count_requests → stats counters, no OTEL</text>
+  <text x="130" y="714" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">LIFESPAN</text>
+  <circle cx="134" cy="727" r="2" fill="#a855f7"/>
+  <text x="144" y="731" font-size="10.5" fill="#b8c2d2">fails fast without OPENAI_API_KEY</text>
+  <circle cx="134" cy="744" r="2" fill="#a855f7"/>
+  <text x="144" y="748" font-size="10.5" fill="#b8c2d2">httpx + AsyncOpenAI built after SDK setup</text>
+  <text x="130" y="770" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">ERRORS</text>
+  <circle cx="134" cy="783" r="2" fill="#a855f7"/>
+  <text x="144" y="787" font-size="10.5" fill="#b8c2d2">upstream failures → HTTP 502 + detail</text>
+  <rect x="128" y="806" width="308" height="26" rx="13" fill="#1a1130" stroke="#7c3aed" stroke-width="0.9"/>
+  <circle cx="142" cy="819" r="3.5" fill="#a855f7"/>
+  <text x="154" y="822.8" font-size="10" font-weight="600" fill="#cdb6f7">/ping, /ask, /ask-hosted return trace_id</text>
+  </g>
+  <g>
+  <rect x="468" y="398" width="340" height="239" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#a855f7" stroke-width="1.4" filter="url(#gviolet)"/>
+  <rect x="486" y="418" width="18" height="18" rx="4" fill="#a855f7"/>
+  <text x="512" y="426" font-size="12.5" font-weight="700" fill="#e3e9f2">LOCAL-TOOLS AGENT</text>
+  <text x="512" y="442" font-size="9" font-weight="700" letter-spacing="0.8" fill="#c4a5f5">POST /ASK · RUN_AGENT()</text>
+  <line x1="484" y1="456" x2="792" y2="456" stroke="#243150" stroke-width="1"/>
+  <rect x="693" y="416" width="97" height="22" rx="11" fill="#1a1130" stroke="#7c3aed" stroke-width="0.8"/>
+  <text x="741.5" y="431" font-size="10" text-anchor="middle" fill="#cdb6f7">MAX_TURNS 8</text>
+  <text x="486" y="478" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">TOOL LOOP</text>
+  <circle cx="490" cy="491" r="2" fill="#a855f7"/>
+  <text x="500" y="495" font-size="10.5" fill="#b8c2d2">llm.turn → responses.create</text>
+  <circle cx="490" cy="508" r="2" fill="#a855f7"/>
+  <text x="500" y="512" font-size="10.5" fill="#b8c2d2">function_call → mcp tools/call</text>
+  <circle cx="490" cy="525" r="2" fill="#a855f7"/>
+  <text x="500" y="529" font-size="10.5" fill="#b8c2d2">until the model returns a Brief</text>
+  <text x="486" y="551" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">MCP CLIENT · §2</text>
+  <circle cx="490" cy="564" r="2" fill="#a855f7"/>
+  <text x="500" y="568" font-size="10.5" fill="#b8c2d2">McpClient · JSON-RPC 2.0 over httpx</text>
+  <circle cx="490" cy="581" r="2" fill="#a855f7"/>
+  <text x="500" y="585" font-size="10.5" fill="#b8c2d2">initialize · tools/list · tools/call</text>
+  <rect x="484" y="599" width="308" height="26" rx="13" fill="#1a1130" stroke="#7c3aed" stroke-width="0.9"/>
+  <circle cx="498" cy="612" r="3.5" fill="#a855f7"/>
+  <text x="510" y="615.8" font-size="10" font-weight="600" fill="#cdb6f7">Every hop is a span in our trace</text>
+  </g>
+  <g>
+  <rect x="468" y="661" width="340" height="183" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#a855f7" stroke-width="1.4" filter="url(#gviolet)"/>
+  <rect x="486" y="681" width="18" height="18" rx="4" fill="#a855f7"/>
+  <text x="512" y="689" font-size="12.5" font-weight="700" fill="#e3e9f2">HOSTED-MCP AGENT</text>
+  <text x="512" y="705" font-size="9" font-weight="700" letter-spacing="0.8" fill="#c4a5f5">POST /ASK-HOSTED · RUN_AGENT_HOSTED()</text>
+  <line x1="484" y1="719" x2="792" y2="719" stroke="#243150" stroke-width="1"/>
+  <text x="486" y="741" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">ONE CALL</text>
+  <circle cx="490" cy="754" r="2" fill="#a855f7"/>
+  <text x="500" y="758" font-size="10.5" fill="#b8c2d2">responses.create(tools=[mcp])</text>
+  <circle cx="490" cy="771" r="2" fill="#a855f7"/>
+  <text x="500" y="775" font-size="10.5" fill="#b8c2d2">require_approval: never</text>
+  <circle cx="490" cy="788" r="2" fill="#a855f7"/>
+  <text x="500" y="792" font-size="10.5" fill="#b8c2d2">mcp_call items → tool_calls</text>
+  <rect x="484" y="806" width="308" height="26" rx="13" fill="#1a1130" stroke="#7c3aed" stroke-width="0.9"/>
+  <circle cx="498" cy="819" r="3.5" fill="#a855f7"/>
+  <text x="510" y="822.8" font-size="10" font-weight="600" fill="#cdb6f7">One opaque hop · duration_ms null</text>
+  </g>
+  <g>
+  <rect x="112" y="868" width="340" height="239" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#94a3b8" stroke-width="1.4" filter="url(#gslate)"/>
+  <rect x="130" y="888" width="18" height="18" rx="4" fill="#94a3b8"/>
+  <text x="156" y="896" font-size="12.5" font-weight="700" fill="#e3e9f2">HEALTH + HEARTBEAT</text>
+  <text x="156" y="912" font-size="9" font-weight="700" letter-spacing="0.8" fill="#cbd5e1">APP.PY §4 · DELIBERATELY SPAN-FREE</text>
+  <line x1="128" y1="926" x2="436" y2="926" stroke="#243150" stroke-width="1"/>
+  <text x="130" y="948" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">GET /HEALTHZ</text>
+  <circle cx="134" cy="961" r="2" fill="#94a3b8"/>
+  <text x="144" y="965" font-size="10.5" fill="#b8c2d2">Docker HEALTHCHECK every 60 s</text>
+  <circle cx="134" cy="978" r="2" fill="#94a3b8"/>
+  <text x="144" y="982" font-size="10.5" fill="#b8c2d2">returns stats.snapshot()</text>
+  <circle cx="134" cy="995" r="2" fill="#94a3b8"/>
+  <text x="144" y="999" font-size="10.5" fill="#b8c2d2">excluded, so probes never trace</text>
+  <text x="130" y="1021" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">HEARTBEAT</text>
+  <circle cx="134" cy="1034" r="2" fill="#94a3b8"/>
+  <text x="144" y="1038" font-size="10.5" fill="#b8c2d2">print [healthz] {...} to stdout</text>
+  <circle cx="134" cy="1051" r="2" fill="#94a3b8"/>
+  <text x="144" y="1055" font-size="10.5" fill="#b8c2d2">every HEALTHZ_INTERVAL_SECONDS</text>
+  <rect x="128" y="1069" width="308" height="26" rx="13" fill="#141c2b" stroke="#475569" stroke-width="0.9"/>
+  <circle cx="142" cy="1082" r="3.5" fill="#94a3b8"/>
+  <text x="154" y="1085.8" font-size="10" font-weight="600" fill="#cbd5e1">The control group: status, no spans</text>
+  </g>
+  <g>
+  <rect x="468" y="868" width="340" height="239" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#fb923c" stroke-width="1.4" filter="url(#gorange)"/>
+  <rect x="486" y="888" width="18" height="18" rx="4" fill="#fb923c"/>
+  <text x="512" y="896" font-size="12.5" font-weight="700" fill="#e3e9f2">OPENTELEMETRY SDK</text>
+  <text x="512" y="912" font-size="9" font-weight="700" letter-spacing="0.8" fill="#fdba74">APP.PY §1 · CONFIGURE_OPENTELEMETRY()</text>
+  <line x1="484" y1="926" x2="792" y2="926" stroke="#243150" stroke-width="1"/>
+  <text x="486" y="948" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">SPANS IN</text>
+  <circle cx="490" cy="961" r="2" fill="#fb923c"/>
+  <text x="500" y="965" font-size="10.5" fill="#b8c2d2">SERVER · FastAPIInstrumentor</text>
+  <circle cx="490" cy="978" r="2" fill="#fb923c"/>
+  <text x="500" y="982" font-size="10.5" fill="#b8c2d2">CLIENT + traceparent · HTTPXClientInstrumentor</text>
+  <circle cx="490" cy="995" r="2" fill="#fb923c"/>
+  <text x="500" y="999" font-size="10.5" fill="#b8c2d2">INTERNAL · agent.run · llm.turn · mcp …</text>
+  <text x="486" y="1021" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">EXPORT · BATCHSPANPROCESSOR</text>
+  <circle cx="490" cy="1034" r="2" fill="#fb923c"/>
+  <text x="500" y="1038" font-size="10.5" fill="#b8c2d2">Console by default, or OTLP/HTTP</text>
+  <circle cx="490" cy="1051" r="2" fill="#fb923c"/>
+  <text x="500" y="1055" font-size="10.5" fill="#b8c2d2">Step 4: + Azure Monitor (commented)</text>
+  <rect x="484" y="1069" width="308" height="26" rx="13" fill="#2a1608" stroke="#c2410c" stroke-width="0.9"/>
+  <circle cx="498" cy="1082" r="3.5" fill="#fb923c"/>
+  <text x="510" y="1085.8" font-size="10" font-weight="600" fill="#fed7aa">Provider fans out to every processor</text>
+  </g>
+  <g>
+  <rect x="96" y="1171" width="464" height="183" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#fbbf24" stroke-width="1.4" filter="url(#ggold)"/>
+  <rect x="114" y="1191" width="18" height="18" rx="4" fill="#fbbf24"/>
+  <text x="140" y="1199" font-size="12.5" font-weight="700" fill="#e3e9f2">CONTAINER LOG</text>
+  <text x="140" y="1215" font-size="9" font-weight="700" letter-spacing="0.8" fill="#fcd34d">STDOUT · PYTHONUNBUFFERED=1</text>
+  <line x1="112" y1="1229" x2="544" y2="1229" stroke="#243150" stroke-width="1"/>
+  <text x="114" y="1251" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">SHOWS</text>
+  <circle cx="118" cy="1264" r="2" fill="#fbbf24"/>
+  <text x="128" y="1268" font-size="10.5" fill="#b8c2d2">span JSON · ConsoleSpanExporter</text>
+  <circle cx="118" cy="1281" r="2" fill="#fbbf24"/>
+  <text x="128" y="1285" font-size="10.5" fill="#b8c2d2">[healthz] {...} heartbeat lines</text>
+  <circle cx="118" cy="1298" r="2" fill="#fbbf24"/>
+  <text x="128" y="1302" font-size="10.5" fill="#b8c2d2">one trace_id per request</text>
+  <text x="348" y="1251" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">HOW TO READ</text>
+  <circle cx="352" cy="1264" r="2" fill="#fbbf24"/>
+  <text x="362" y="1268" font-size="10.5" fill="#b8c2d2">docker compose logs -f api</text>
+  <circle cx="352" cy="1281" r="2" fill="#fbbf24"/>
+  <text x="362" y="1285" font-size="10.5" fill="#b8c2d2">spans arrive in ~5 s batches</text>
+  <circle cx="352" cy="1298" r="2" fill="#fbbf24"/>
+  <text x="362" y="1302" font-size="10.5" fill="#b8c2d2">children print before parents</text>
+  <rect x="112" y="1316" width="432" height="26" rx="13" fill="#2a2208" stroke="#b45309" stroke-width="0.9"/>
+  <circle cx="126" cy="1329" r="3.5" fill="#fbbf24"/>
+  <text x="138" y="1332.8" font-size="10" font-weight="600" fill="#fde68a">Console mode: the default · zero infrastructure</text>
+  </g>
+  <g>
+  <rect x="576" y="1171" width="248" height="183" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#fbbf24" stroke-width="1.4" filter="url(#ggold)"/>
+  <rect x="594" y="1191" width="18" height="18" rx="4" fill="#fbbf24"/>
+  <text x="620" y="1199" font-size="12.5" font-weight="700" fill="#e3e9f2">JAEGER</text>
+  <text x="620" y="1215" font-size="9" font-weight="700" letter-spacing="0.8" fill="#fcd34d">CONTAINER · FOUNDRY-JAEGER</text>
+  <line x1="592" y1="1229" x2="808" y2="1229" stroke="#243150" stroke-width="1"/>
+  <text x="594" y="1251" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">V2 ALL-IN-ONE · OPT-IN</text>
+  <circle cx="598" cy="1264" r="2" fill="#fbbf24"/>
+  <text x="608" y="1268" font-size="10.5" fill="#b8c2d2">OTLP/HTTP :4318 · gRPC :4317</text>
+  <circle cx="598" cy="1281" r="2" fill="#fbbf24"/>
+  <text x="608" y="1285" font-size="10.5" fill="#b8c2d2">UI · localhost:16686</text>
+  <circle cx="598" cy="1298" r="2" fill="#fbbf24"/>
+  <text x="608" y="1302" font-size="10.5" fill="#b8c2d2">in memory · 1 GB cap</text>
+  <rect x="592" y="1316" width="216" height="26" rx="13" fill="#2a2208" stroke="#b45309" stroke-width="0.9"/>
+  <circle cx="606" cy="1329" r="3.5" fill="#fbbf24"/>
+  <text x="618" y="1332.8" font-size="10" font-weight="600" fill="#fde68a">compose.jaeger.yaml</text>
+  </g>
+  <rect x="900" y="132" width="440" height="362" rx="14" fill="#0b111e" fill-opacity="0.55" stroke="#1f2b44" stroke-width="1.3"/>
+  <g>
+  <rect x="1191" y="144" width="133" height="20" rx="10" fill="#0e1626" stroke="#334155" stroke-width="0.9"/>
+  <text x="1257.5" y="158" font-size="9" font-weight="700" letter-spacing="1" text-anchor="middle" fill="#cbd5e1">MICROSOFT LEARN</text>
+  <text x="1181" y="158" font-size="10" text-anchor="end" fill="#6b7689">learn.microsoft.com</text>
+  </g>
+  <g>
+  <rect x="916" y="178" width="408" height="300" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#ec4899" stroke-width="1.4" filter="url(#gmagenta)"/>
+  <rect x="934" y="198" width="18" height="18" rx="4" fill="#ec4899"/>
+  <text x="960" y="206" font-size="12.5" font-weight="700" fill="#e3e9f2">MICROSOFT LEARN MCP SERVER</text>
+  <text x="960" y="222" font-size="9" font-weight="700" letter-spacing="0.8" fill="#f9a8d4">/API/MCP · STREAMABLE HTTP · NO AUTH</text>
+  <line x1="932" y1="236" x2="1308" y2="236" stroke="#243150" stroke-width="1"/>
+  <text x="934" y="258" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">TRANSPORT</text>
+  <circle cx="938" cy="271" r="2" fill="#ec4899"/>
+  <text x="948" y="275" font-size="10.5" fill="#b8c2d2">JSON-RPC 2.0 · protocolVersion 2025-03-26</text>
+  <circle cx="938" cy="288" r="2" fill="#ec4899"/>
+  <text x="948" y="292" font-size="10.5" fill="#b8c2d2">JSON or one-shot SSE · Mcp-Session-Id</text>
+  <text x="934" y="314" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">TOOLS</text>
+  <rect x="932" y="322" width="169" height="24" rx="12" fill="#2a0f22" stroke="#be185d" stroke-width="0.9"/>
+  <circle cx="946" cy="334" r="3.5" fill="#ec4899"/>
+  <text x="958" y="337.8" font-size="10" font-weight="600" fill="#fbcfe8">microsoft_docs_search</text>
+  <rect x="1111" y="322" width="160" height="24" rx="12" fill="#2a0f22" stroke="#be185d" stroke-width="0.9"/>
+  <circle cx="1125" cy="334" r="3.5" fill="#ec4899"/>
+  <text x="1137" y="337.8" font-size="10" font-weight="600" fill="#fbcfe8">microsoft_docs_fetch</text>
+  <text x="934" y="368" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">CALLED BY</text>
+  <circle cx="938" cy="381" r="2" fill="#ec4899"/>
+  <text x="948" y="385" font-size="10.5" fill="#b8c2d2">/ask and /tools · our McpClient (traced)</text>
+  <circle cx="938" cy="398" r="2" fill="#ec4899"/>
+  <text x="948" y="402" font-size="10.5" fill="#b8c2d2">/ask-hosted · OpenAI's servers (untraced)</text>
+  <rect x="932" y="440" width="376" height="26" rx="13" fill="#2a0f22" stroke="#be185d" stroke-width="0.9"/>
+  <circle cx="946" cy="453" r="3.5" fill="#ec4899"/>
+  <text x="958" y="456.8" font-size="10" font-weight="600" fill="#fbcfe8">LEARN_MCP_URL · must be public for /ask-hosted</text>
+  </g>
+  <rect x="900" y="534" width="440" height="391" rx="14" fill="#0b111e" fill-opacity="0.55" stroke="#1f2b44" stroke-width="1.3"/>
+  <g>
+  <rect x="1191" y="546" width="133" height="20" rx="10" fill="#0e1626" stroke="#334155" stroke-width="0.9"/>
+  <text x="1257.5" y="560" font-size="9" font-weight="700" letter-spacing="1" text-anchor="middle" fill="#cbd5e1">OPENAI PLATFORM</text>
+  <text x="1181" y="560" font-size="10" text-anchor="end" fill="#6b7689">api.openai.com · HTTPS</text>
+  </g>
+  <g>
+  <rect x="916" y="580" width="408" height="329" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#60a5fa" stroke-width="1.4" filter="url(#gblue)"/>
+  <rect x="934" y="600" width="18" height="18" rx="4" fill="#60a5fa"/>
+  <text x="960" y="608" font-size="12.5" font-weight="700" fill="#e3e9f2">OPENAI RESPONSES API</text>
+  <text x="960" y="624" font-size="9" font-weight="700" letter-spacing="0.8" fill="#93c5fd">RESPONSES.CREATE · ASYNCOPENAI SDK</text>
+  <line x1="932" y1="638" x2="1308" y2="638" stroke="#243150" stroke-width="1"/>
+  <rect x="1219" y="598" width="87" height="22" rx="11" fill="#0b1a33" stroke="#2563eb" stroke-width="0.8"/>
+  <text x="1262.5" y="613" font-size="10" text-anchor="middle" fill="#bfdbfe">gpt-5.6-luna</text>
+  <text x="934" y="660" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">MODEL</text>
+  <circle cx="938" cy="673" r="2" fill="#60a5fa"/>
+  <text x="948" y="677" font-size="10.5" fill="#b8c2d2">OPENAI_MODEL · default gpt-5.6-luna</text>
+  <circle cx="938" cy="690" r="2" fill="#60a5fa"/>
+  <text x="948" y="694" font-size="10.5" fill="#b8c2d2">same SYSTEM_PROMPT in both modes</text>
+  <circle cx="938" cy="707" r="2" fill="#60a5fa"/>
+  <text x="948" y="711" font-size="10.5" fill="#b8c2d2">strict JSON schema output: Brief</text>
+  <text x="934" y="733" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">/ASK · EVERY LLM.TURN</text>
+  <circle cx="938" cy="746" r="2" fill="#60a5fa"/>
+  <text x="948" y="750" font-size="10.5" fill="#b8c2d2">function tools from MCP tools/list</text>
+  <circle cx="938" cy="763" r="2" fill="#60a5fa"/>
+  <text x="948" y="767" font-size="10.5" fill="#b8c2d2">function_call items → our tool loop</text>
+  <circle cx="938" cy="780" r="2" fill="#60a5fa"/>
+  <text x="948" y="784" font-size="10.5" fill="#b8c2d2">tool results appended to the input</text>
+  <text x="934" y="806" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">/ASK-HOSTED · ONE CALL</text>
+  <circle cx="938" cy="819" r="2" fill="#60a5fa"/>
+  <text x="948" y="823" font-size="10.5" fill="#b8c2d2">hosted mcp tool · server_label microsoft_learn</text>
+  <circle cx="938" cy="836" r="2" fill="#60a5fa"/>
+  <text x="948" y="840" font-size="10.5" fill="#b8c2d2">OpenAI runs tools/list + tools/call</text>
+  <circle cx="938" cy="853" r="2" fill="#60a5fa"/>
+  <text x="948" y="857" font-size="10.5" fill="#b8c2d2">returns mcp_list_tools + mcp_call items</text>
+  <rect x="932" y="871" width="376" height="26" rx="13" fill="#0b1a33" stroke="#2563eb" stroke-width="0.9"/>
+  <circle cx="946" cy="884" r="3.5" fill="#60a5fa"/>
+  <text x="958" y="887.8" font-size="10" font-weight="600" fill="#bfdbfe">AsyncOpenAI over httpx → one CLIENT span per call</text>
+  </g>
+  <rect x="900" y="965" width="440" height="421" rx="14" fill="#0b111e" fill-opacity="0.55" stroke="#1f2b44" stroke-width="1.3"/>
+  <g>
+  <rect x="1190" y="977" width="134" height="20" rx="10" fill="#0e1626" stroke="#334155" stroke-width="0.9"/>
+  <text x="1257" y="991" font-size="9" font-weight="700" letter-spacing="1" text-anchor="middle" fill="#cbd5e1">MICROSOFT AZURE</text>
+  <text x="1180" y="991" font-size="10" text-anchor="end" fill="#6b7689">Step 4 · commented out</text>
+  </g>
+  <g>
+  <rect x="916" y="1011" width="408" height="359" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#fbbf24" stroke-width="1.4" filter="url(#ggold)"/>
+  <rect x="934" y="1031" width="18" height="18" rx="4" fill="#fbbf24"/>
+  <text x="960" y="1039" font-size="12.5" font-weight="700" fill="#e3e9f2">APPLICATION INSIGHTS</text>
+  <text x="960" y="1055" font-size="9" font-weight="700" letter-spacing="0.8" fill="#fcd34d">AZURE MONITOR · STEP 4</text>
+  <line x1="932" y1="1069" x2="1308" y2="1069" stroke="#243150" stroke-width="1"/>
+  <rect x="1239" y="1029" width="67" height="22" rx="11" fill="#2a2208" stroke="#b45309" stroke-width="0.8"/>
+  <text x="1272.5" y="1044" font-size="10" text-anchor="middle" fill="#fde68a">optional</text>
+  <text x="934" y="1091" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">ENABLE</text>
+  <circle cx="938" cy="1104" r="2" fill="#fbbf24"/>
+  <text x="948" y="1108" font-size="10.5" fill="#b8c2d2">pip install azure-monitor-opentelemetry-exporter</text>
+  <circle cx="938" cy="1121" r="2" fill="#fbbf24"/>
+  <text x="948" y="1125" font-size="10.5" fill="#b8c2d2">APPLICATIONINSIGHTS_CONNECTION_STRING</text>
+  <circle cx="938" cy="1138" r="2" fill="#fbbf24"/>
+  <text x="948" y="1142" font-size="10.5" fill="#b8c2d2">uncomment the Step 4 block · restart</text>
+  <text x="934" y="1164" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">PORTAL MAPPING</text>
+  <circle cx="938" cy="1177" r="2" fill="#fbbf24"/>
+  <text x="948" y="1181" font-size="10.5" fill="#b8c2d2">SERVER spans → requests</text>
+  <circle cx="938" cy="1194" r="2" fill="#fbbf24"/>
+  <text x="948" y="1198" font-size="10.5" fill="#b8c2d2">CLIENT spans → dependencies (HTTP)</text>
+  <circle cx="938" cy="1211" r="2" fill="#fbbf24"/>
+  <text x="948" y="1215" font-size="10.5" fill="#b8c2d2">INTERNAL spans → dependencies (InProc)</text>
+  <circle cx="938" cy="1228" r="2" fill="#fbbf24"/>
+  <text x="948" y="1232" font-size="10.5" fill="#b8c2d2">service.name → cloud_RoleName</text>
+  <text x="934" y="1254" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">VIEWS</text>
+  <circle cx="938" cy="1267" r="2" fill="#fbbf24"/>
+  <text x="948" y="1271" font-size="10.5" fill="#b8c2d2">Application Map · end-to-end transaction</text>
+  <circle cx="938" cy="1284" r="2" fill="#fbbf24"/>
+  <text x="948" y="1288" font-size="10.5" fill="#b8c2d2">KQL on customDimensions["agent.mode"]</text>
+  <circle cx="938" cy="1301" r="2" fill="#fbbf24"/>
+  <text x="948" y="1305" font-size="10.5" fill="#b8c2d2">exceptions from record_exception()</text>
+  <rect x="932" y="1332" width="376" height="26" rx="13" fill="#2a2208" stroke="#b45309" stroke-width="0.9"/>
+  <circle cx="946" cy="1345" r="3.5" fill="#fbbf24"/>
+  <text x="958" y="1348.8" font-size="10" font-weight="600" fill="#fde68a">Same spans, second processor · no app changes</text>
+  </g>
+  <path d="M200 276 L200 398" fill="none" stroke="#a855f7" stroke-width="1.6" marker-end="url(#mviolet)"/>
+  <path d="M808 428 L916 428" fill="none" stroke="#ec4899" stroke-width="1.6" marker-end="url(#mmagenta)"/>
+  <path d="M808 610 L916 610" fill="none" stroke="#60a5fa" stroke-width="1.6" marker-end="url(#mblue)"/>
+  <path d="M808 752 L916 752" fill="none" stroke="#60a5fa" stroke-width="1.6" marker-end="url(#mblue)"/>
+  <path d="M980 580 L980 478" fill="none" stroke="#ec4899" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#mmagenta)"/>
+  <path d="M200 1107 L200 1171" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#mslate)"/>
+  <path d="M520 1107 L520 1171" fill="none" stroke="#fb923c" stroke-width="1.6" marker-end="url(#morange)"/>
+  <path d="M700 1107 L700 1171" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#morange)"/>
+  <path d="M808 1080 L916 1080" fill="none" stroke="#fb923c" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#morange)"/>
+  <circle cx="200" cy="292" r="10" fill="#0e1626" stroke="#a855f7" stroke-width="1.3"/>
+  <text x="200" y="295.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#c4a5f5">1</text>
+  <circle cx="880" cy="428" r="10" fill="#0e1626" stroke="#ec4899" stroke-width="1.3"/>
+  <text x="880" y="431.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#f9a8d4">2</text>
+  <circle cx="880" cy="610" r="10" fill="#0e1626" stroke="#60a5fa" stroke-width="1.3"/>
+  <text x="880" y="613.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#93c5fd">3</text>
+  <circle cx="880" cy="752" r="10" fill="#0e1626" stroke="#60a5fa" stroke-width="1.3"/>
+  <text x="880" y="755.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#93c5fd">4</text>
+  <circle cx="980" cy="514" r="10" fill="#0e1626" stroke="#ec4899" stroke-width="1.3"/>
+  <text x="980" y="517.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#f9a8d4">5</text>
+  <circle cx="200" cy="1147" r="10" fill="#0e1626" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="200" y="1150.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#cbd5e1">6</text>
+  <circle cx="520" cy="1147" r="10" fill="#0e1626" stroke="#fb923c" stroke-width="1.3"/>
+  <text x="520" y="1150.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fdba74">7</text>
+  <circle cx="700" cy="1147" r="10" fill="#0e1626" stroke="#fb923c" stroke-width="1.3"/>
+  <text x="700" y="1150.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fdba74">8</text>
+  <circle cx="880" cy="1080" r="10" fill="#0e1626" stroke="#fb923c" stroke-width="1.3"/>
+  <text x="880" y="1083.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fdba74">9</text>
+  <g>
+  <text x="64" y="1407" font-size="9" font-weight="700" letter-spacing="0.8" fill="#5b6678">FLOWS</text>
+  <circle cx="74" cy="1425" r="8" fill="#0e1626" stroke="#a855f7" stroke-width="1.3"/>
+  <text x="74" y="1428.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#c4a5f5">1</text>
+  <text x="90" y="1429" font-size="10.5" fill="#aeb8c7">Swagger UI or curl → uvicorn :8000 · SERVER span per request</text>
+  <circle cx="74" cy="1447" r="8" fill="#0e1626" stroke="#ec4899" stroke-width="1.3"/>
+  <text x="74" y="1450.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#f9a8d4">2</text>
+  <text x="90" y="1451" font-size="10.5" fill="#aeb8c7">/ask: McpClient → Learn MCP · JSON-RPC over httpx · CLIENT span</text>
+  <circle cx="74" cy="1469" r="8" fill="#0e1626" stroke="#60a5fa" stroke-width="1.3"/>
+  <text x="74" y="1472.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#93c5fd">3</text>
+  <text x="90" y="1473" font-size="10.5" fill="#aeb8c7">/ask: one responses.create per llm.turn · function tools</text>
+  <circle cx="502" cy="1425" r="8" fill="#0e1626" stroke="#60a5fa" stroke-width="1.3"/>
+  <text x="502" y="1428.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#93c5fd">4</text>
+  <text x="518" y="1429" font-size="10.5" fill="#aeb8c7">/ask-hosted: one responses.create with tools=[mcp]</text>
+  <circle cx="502" cy="1447" r="8" fill="#0e1626" stroke="#ec4899" stroke-width="1.3"/>
+  <text x="502" y="1450.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#f9a8d4">5</text>
+  <text x="518" y="1451" font-size="10.5" fill="#aeb8c7">OpenAI → Learn MCP for /ask-hosted · NOT in our trace</text>
+  <circle cx="502" cy="1469" r="8" fill="#0e1626" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="502" y="1472.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#cbd5e1">6</text>
+  <text x="518" y="1473" font-size="10.5" fill="#aeb8c7">Heartbeat print → stdout every 60 s · never a span</text>
+  <circle cx="930" cy="1425" r="8" fill="#0e1626" stroke="#fb923c" stroke-width="1.3"/>
+  <text x="930" y="1428.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fdba74">7</text>
+  <text x="946" y="1429" font-size="10.5" fill="#aeb8c7">ConsoleSpanExporter → stdout · default, no OTLP endpoint</text>
+  <circle cx="930" cy="1447" r="8" fill="#0e1626" stroke="#fb923c" stroke-width="1.3"/>
+  <text x="930" y="1450.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fdba74">8</text>
+  <text x="946" y="1451" font-size="10.5" fill="#aeb8c7">OTLPSpanExporter → jaeger:4318 · replaces the console</text>
+  <circle cx="930" cy="1469" r="8" fill="#0e1626" stroke="#fb923c" stroke-width="1.3"/>
+  <text x="930" y="1472.8" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fdba74">9</text>
+  <text x="946" y="1473" font-size="10.5" fill="#aeb8c7">Step 4 (commented): AzureMonitorTraceExporter → App Insights</text>
+  </g>
+  <text x="64" y="1496" font-size="9" font-weight="700" letter-spacing="0.8" fill="#5b6678">LEGEND</text>
+  <circle cx="132" cy="1493" r="5" fill="#a855f7"/>
+  <text x="142" y="1496.5" font-size="10.5" fill="#8b97a8">App code + client</text>
+  <circle cx="261.484" cy="1493" r="5" fill="#60a5fa"/>
+  <text x="271.484" y="1496.5" font-size="10.5" fill="#8b97a8">OpenAI model</text>
+  <circle cx="371.844" cy="1493" r="5" fill="#ec4899"/>
+  <text x="381.844" y="1496.5" font-size="10.5" fill="#8b97a8">MCP</text>
+  <circle cx="430.566" cy="1493" r="5" fill="#fb923c"/>
+  <text x="440.566" y="1496.5" font-size="10.5" fill="#8b97a8">OpenTelemetry</text>
+  <circle cx="546.418" cy="1493" r="5" fill="#fbbf24"/>
+  <text x="556.418" y="1496.5" font-size="10.5" fill="#8b97a8">Trace + log viewers</text>
+  <circle cx="685.512" cy="1493" r="5" fill="#94a3b8"/>
+  <text x="695.512" y="1496.5" font-size="10.5" fill="#8b97a8">Health, no OTEL</text>
+  <line x1="801.246" y1="1493" x2="823.246" y2="1493" stroke="#aeb8c7" stroke-width="1.6" stroke-dasharray="6 5"/>
+  <text x="830.246" y="1496.5" font-size="10.5" fill="#8b97a8">Opt-in or outside our trace</text>
+  <text x="1344" y="1523" font-size="10" text-anchor="end" fill="#5b6678">foundry-learn-agent · architecture · 2026</text>
+</svg>

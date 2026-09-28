@@ -1,0 +1,33 @@
+# =============================================================================
+# Foundry Learn Agent - Jaeger override
+# Author : dcodev1702 & M365 Copilot / Cowork
+# Created: 2026-09-28
+#
+# An OVERRIDE file: it is merged on top of compose.yaml and (1) adds a Jaeger all-in-one, (2) points the API's
+# OTLP exporter at it. Nothing in app.py changes - the exporter is chosen by one environment variable.
+#
+#   docker compose -f compose.yaml -f compose.jaeger.yaml up --build
+#   open http://localhost:16686   -> service "foundry-learn-agent" -> Find Traces
+#
+# Trace shape comparison: call POST /ask and POST /ask-hosted once each, then open both traces side by side.
+# =============================================================================
+services:
+  api:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318     # service name = DNS name on the compose network
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+    depends_on:
+      jaeger:
+        condition: service_started
+
+  jaeger:
+    image: jaegertracing/jaeger:latest                    # Jaeger v2 all-in-one: OTLP receivers on 4317 (gRPC) and 4318 (HTTP)
+    container_name: foundry-jaeger
+    ports:
+      - "16686:16686"                                     # Jaeger UI
+      - "4318:4318"                                       # OTLP/HTTP, published so `uvicorn` on the host can send too
+    deploy:
+      resources:
+        limits:
+          memory: 1g                                      # Jaeger keeps traces in memory; 1 GB is plenty for learning
+    restart: unless-stopped
