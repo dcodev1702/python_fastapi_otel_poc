@@ -11,7 +11,7 @@ Description : A small FastAPI service for learning OpenTelemetry (OTEL) end to e
 
 Author      : dcodev1702 & M365 Copilot / Cowork
 Created     : 2026-09-28
-Version     : 0.2.1
+Version     : 0.2.2
 Python      : 3.11+
 Run (local) : uvicorn app:app --reload                                  -> http://127.0.0.1:8000/docs
 Run (Docker): docker compose up --build                                 -> http://localhost:8000/docs
@@ -36,7 +36,7 @@ Trace shape for POST /ask (local tools)
                   +- mcp tools/list
                   |   +- POST learn.microsoft.com
                   +- llm.turn  (turn 1)
-                  |   +- POST api.openai.com .......... CLIENT span  (the OpenAI SDK uses httpx internally!)
+                  |   +- POST api.openai.com .......... CLIENT span  (the OpenAI SDK's httpx2, instrumented too!)
                   +- mcp tools/call microsoft_docs_search   <- repeats for every tool call the model makes
                   |   +- POST learn.microsoft.com
                   +- llm.turn  (turn n) -> final JSON answer
@@ -76,14 +76,14 @@ from fastapi.responses import RedirectResponse
 from openai import APIError, AsyncOpenAI
 from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPX2ClientInstrumentor, HTTPXClientInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 from pydantic import BaseModel, ConfigDict, Field
 
 SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "foundry-learn-agent")
-SERVICE_VERSION = "0.2.1"
+SERVICE_VERSION = "0.2.2"
 
 # =============================================================================
 # 1. OPENTELEMETRY SETUP
@@ -152,9 +152,12 @@ def configure_opentelemetry() -> str:
 
     trace.set_tracer_provider(provider)  # from here on, every API call (ours or a library's) routes into this SDK
 
-    # OUTBOUND: wrap httpx so every request becomes a CLIENT span and carries a W3C `traceparent` header.
-    # Do this BEFORE any httpx / OpenAI client is created - that is the safest ordering across versions.
+    # OUTBOUND: wrap the HTTP clients so every request becomes a CLIENT span and carries a W3C `traceparent`
+    # header. It takes two instrumentors: our McpClient uses httpx, but the OpenAI SDK (openai 3.x) is built on
+    # httpx2, a separate package - with the httpx one alone, every llm.turn span is missing its api.openai.com
+    # child. Do this BEFORE any httpx / OpenAI client is created - that is the safest ordering across versions.
     HTTPXClientInstrumentor().instrument()
+    HTTPX2ClientInstrumentor().instrument()
     return mode
 
 

@@ -4,7 +4,7 @@
 |---|---|
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
-| **Version** | 0.2.1 |
+| **Version** | 0.2.2 |
 | **Runs on** | Python 3.11+ locally, or Docker Compose on Linux (container capped at 3 GB RAM) |
 
 A small, runnable service for learning how OpenTelemetry (OTEL) tracing works in a Python API that drives an
@@ -177,7 +177,7 @@ calls, OpenAI did. In Jaeger the trace collapses to `agent.run → llm.turn → 
 **6. Watch the heartbeat.** Every 60 s the log shows one line like
 
 ```
-[healthz] {"status": "ok", "service": "foundry-learn-agent", "version": "0.2.1", "time": "...", "uptime_s": 420,
+[healthz] {"status": "ok", "service": "foundry-learn-agent", "version": "0.2.2", "time": "...", "uptime_s": 420,
            "exporter": "console", "model": "gpt-5.6-sol", "rss_mb": 96.4,
            "requests": {"/healthz": 7, "/ping": 1, "/tools": 2, "/ask": 1, "/ask-hosted": 1}, "errors": {},
            "llm_turns": 4, "tool_calls": 5, "tokens": {"input_tokens": 18342, "output_tokens": 1210}}
@@ -211,7 +211,7 @@ value of the spans stands out by contrast.
 | `opentelemetry-sdk` | Implementation | `TracerProvider`, `Resource`, `BatchSpanProcessor`, `ConsoleSpanExporter` in `configure_opentelemetry()` |
 | `opentelemetry-exporter-otlp-proto-http` | Exporter | `OTLPSpanExporter`, used only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set |
 | `opentelemetry-instrumentation-fastapi` | Inbound auto-instrumentation | `FastAPIInstrumentor.instrument_app(app, excluded_urls=...)` — root SERVER span per request |
-| `opentelemetry-instrumentation-httpx` | Outbound auto-instrumentation | `HTTPXClientInstrumentor().instrument()` — every httpx request (ours *and* the OpenAI SDK's) becomes a CLIENT span carrying a `traceparent` header |
+| `opentelemetry-instrumentation-httpx` | Outbound auto-instrumentation | `HTTPXClientInstrumentor().instrument()` for our httpx client and `HTTPX2ClientInstrumentor().instrument()` for the OpenAI SDK, which is built on httpx2 — every request becomes a CLIENT span carrying a `traceparent` header |
 | `azure-monitor-opentelemetry-exporter` | Exporter (Step 4, commented) | `AzureMonitorTraceExporter` added as a *second* processor — same spans, second destination |
 
 Three rules of thumb the code demonstrates:
@@ -258,7 +258,8 @@ Both live at the top of section 3 in `app.py`.
 ## Exercises
 
 1. **Auto vs manual.** Comment out `HTTPXClientInstrumentor().instrument()`, restart, call `/tools`. Every
-   `POST` CLIENT span disappears; the manual `mcp …` spans remain.
+   `POST` CLIENT span disappears; the manual `mcp …` spans remain. (The OpenAI calls in `/ask` have their own
+   switch, `HTTPX2ClientInstrumentor`: the SDK is built on httpx2, not httpx.)
 2. **Where the root comes from.** Remove `FastAPIInstrumentor.instrument_app(...)`. `agent.run` becomes the root
    and `/ping` reports a `trace_id` of all zeros — there is no span at all.
 3. **Exclusion is a regex list.** Add `ping` to `OTEL_PYTHON_FASTAPI_EXCLUDED_URLS` and watch `/ping` go silent

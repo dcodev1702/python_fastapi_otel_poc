@@ -7,6 +7,16 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-28
+
+### Fixed
+
+- Calls to OpenAI are traced again. openai 3.x is built on `httpx2`, a separate package that
+  `HTTPXClientInstrumentor` does not patch, so every `llm.turn` span was missing its `POST api.openai.com` CLIENT
+  child and no `traceparent` went to OpenAI. `configure_opentelemetry()` now also calls
+  `HTTPX2ClientInstrumentor().instrument()`, from the same `opentelemetry-instrumentation-httpx` package, so the
+  requirements are unchanged.
+
 ## [0.2.1] - 2026-09-28
 
 Fixes the default model and stops publishing ports on every interface. Also adds the documentation and repository
@@ -71,5 +81,6 @@ Initial version, written offline; `design.md` §6 lists the external contracts t
   - the `compose.jaeger.yaml` override that adds Jaeger.
 - `README.md`, a walkthrough, and `design.md`, the design notes and verification checklist.
 
-[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/dcodev1702/python_fastapi_otel_poc/releases/tag/v0.2.1

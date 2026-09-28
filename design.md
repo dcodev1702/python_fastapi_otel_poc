@@ -5,7 +5,7 @@
 | **Project** | Foundry Learn Agent — FastAPI + OpenTelemetry learning service with an LLM agent that uses the Microsoft Learn MCP server |
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
-| **Version** | 0.2.1 |
+| **Version** | 0.2.2 |
 | **Audience** | (1) the human maintainer; (2) a GenAI assistant **with internet access** that will finish verification |
 
 ---
@@ -52,9 +52,9 @@ only).
 
 `POST /ask` (local tools): `SERVER POST /ask` → `agent.run` → `mcp initialize` → `mcp notifications/initialized`
 → `mcp tools/list` → `llm.turn` (×N) interleaved with `mcp tools/call <tool>` (×M); each `mcp …` and `llm.turn`
-span has one automatic httpx `POST` CLIENT child.
+span has one automatic `POST` CLIENT child (httpx for Learn, httpx2 for OpenAI).
 
-`POST /ask-hosted` (hosted MCP): `SERVER POST /ask-hosted` → `agent.run` → `llm.turn` → one httpx `POST`
+`POST /ask-hosted` (hosted MCP): `SERVER POST /ask-hosted` → `agent.run` → `llm.turn` → one httpx2 `POST`
 CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI response body, surfaced as
 `tool_calls` (with `duration_ms: null`).
 
@@ -101,7 +101,7 @@ Errors from upstream (OpenAI, Learn, schema violation, turn limit) → HTTP **50
 | `agent.run` | INTERNAL (manual) | `agent.mode`, `gen_ai.request.model`, `agent.tools[]`, `agent.turns`, `agent.tool_calls`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`; `record_exception` on tool failures; event `mcp_call.error` (hosted) |
 | `llm.turn` | INTERNAL (manual) | `agent.turn`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens` |
 | `mcp <method>[ <tool>]` | INTERNAL (manual) | `rpc.system=jsonrpc`, `rpc.method`, `mcp.tool.name`, `mcp.tool.arguments` |
-| `POST` (httpx auto) | CLIENT | HTTP semconv attrs (old or new names depending on `OTEL_SEMCONV_STABILITY_OPT_IN`) |
+| `POST` (httpx / httpx2 auto) | CLIENT | HTTP semconv attrs (old or new names depending on `OTEL_SEMCONV_STABILITY_OPT_IN`) |
 | `<METHOD> <route>` (FastAPI auto) | SERVER | HTTP semconv attrs; children `… http receive` / `… http send` |
 
 Resource: `service.name` (from `OTEL_SERVICE_NAME`, default `foundry-learn-agent`), `service.version`.
@@ -109,7 +109,7 @@ Resource: `service.name` (from `OTEL_SERVICE_NAME`, default `foundry-learn-agent
 ### `stats` snapshot (heartbeat line and `/healthz` body)
 
 ```json
-{"status":"ok","service":"foundry-learn-agent","version":"0.2.1","time":"<UTC ISO>","uptime_s":0,
+{"status":"ok","service":"foundry-learn-agent","version":"0.2.2","time":"<UTC ISO>","uptime_s":0,
  "exporter":"console|otlp[+azure-monitor]","model":"gpt-5.6-sol","rss_mb":25.6,
  "requests":{"/path":n},"errors":{"/path":n},"llm_turns":0,"tool_calls":0,
  "tokens":{"input_tokens":0,"output_tokens":0}}
@@ -140,7 +140,8 @@ Nothing in this path may perform I/O that would create a span.
    indistinguishable; the manual `mcp tools/call <tool>` span carries the meaning.
 3. **One Pydantic model, two jobs.** `Brief` is the FastAPI response schema *and* the OpenAI strict JSON
    schema (`extra="forbid"` → `additionalProperties: false`, all fields required — both strict-mode rules).
-4. **SDK configured at import, clients created in `lifespan`.** `HTTPXClientInstrumentor().instrument()` must
+4. **SDK configured at import, clients created in `lifespan`.** `HTTPXClientInstrumentor().instrument()` (httpx,
+   used by `McpClient`) and `HTTPX2ClientInstrumentor().instrument()` (httpx2, used by the OpenAI SDK 3.x) must
    run before any `httpx.AsyncClient`/`AsyncOpenAI` exists so both are patched.
 5. **`/healthz` is excluded from tracing, `/ping` is not.** Probes run forever and are noise; the contrast is
    itself a lesson about `excluded_urls`. The heartbeat is plain `print` — a deliberate "control group".
@@ -190,7 +191,7 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 |---|---|---|---|---|
 | T1 | Latest core is **≥ 1.44.0** and the matching contrib is **`0.(N+21)b0`** (1.44.0 ↔ 0.65b0); floors `>=1.44.0,<2` / `>=0.65b0,<1` resolve to a consistent set. | `requirements.txt` | PyPI: `opentelemetry-sdk`, `opentelemetry-instrumentation-httpx` | Adjust floors; keep the lockstep note accurate. |
 | T2 | `FastAPIInstrumentor.instrument_app(app, excluded_urls="<comma-separated regexes>")` exists; passing `excluded_urls` overrides `OTEL_PYTHON_FASTAPI_EXCLUDED_URLS`; `exclude_spans=["receive","send"]` is a valid kwarg (README exercise). | `app.py` §5, README exercises | opentelemetry-instrumentation-fastapi docs | Adjust kwarg names. |
-| T3 | `HTTPXClientInstrumentor().instrument()` patches clients created afterwards, including the one inside the OpenAI SDK; a `traceparent` header is injected. | `configure_opentelemetry()` | opentelemetry-instrumentation-httpx docs | If newer versions require `instrument_client(client)`, instrument `app.state.http` and `app.state.openai._client` in `lifespan`. |
+| T3 | `HTTPXClientInstrumentor().instrument()` and `HTTPX2ClientInstrumentor().instrument()` patch clients created afterwards: our httpx client and the OpenAI SDK's httpx2 one; a `traceparent` header is injected. **Verified 2026-09-28:** openai 3.20.0 is built on `httpx2`, which the httpx instrumentor does not patch, so every `llm.turn` span lacked its child; `HTTPX2ClientInstrumentor` (same package, ≥ 0.65b0) fixed it, and each `llm.turn` now has a `POST api.openai.com` CLIENT child. | `configure_opentelemetry()` | opentelemetry-instrumentation-httpx docs | If newer versions require `instrument_client(client)`, instrument `app.state.http` and `app.state.openai._client` in `lifespan`. |
 | T4 | OTLP/HTTP exporter import path `opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter`; with no args it reads `OTEL_EXPORTER_OTLP_ENDPOINT` and appends `/v1/traces`. | `configure_opentelemetry()` | opentelemetry-exporter-otlp-proto-http docs | Adjust import / pass `endpoint=` explicitly. |
 | T5 | `OTEL_BSP_SCHEDULE_DELAY` (ms) and `OTEL_SEMCONV_STABILITY_OPT_IN=http` are honoured. | `.env.example`, README | OTEL Python SDK env var docs | Fix names in `.env.example` and README. |
 | T6 | Semantic-convention attribute names on auto spans are either `http.method/http.url/http.status_code` or `http.request.method/url.full/http.response.status_code`. | README "Reading the console output" | Run `/ping` once | Update README wording. |
