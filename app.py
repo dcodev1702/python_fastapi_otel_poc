@@ -247,7 +247,7 @@ class McpClient:
 # =============================================================================
 # 3. THE AGENT - prompts, output contract, and two ways to run the tool loop
 # =============================================================================
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-sol")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 MAX_TURNS = 8  # safety valve so a confused model cannot loop (and bill you) forever
 
 SYSTEM_PROMPT = """\
