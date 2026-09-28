@@ -7,6 +7,14 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-28
+
+### Changed
+
+- The image is built on `python:3.14.7-slim` instead of `python:3.12-slim`, so the container runs Python 3.14.7.
+  Every dependency installs from a prebuilt wheel, pip resolves the same package versions as before, and the
+  image is 12 MB smaller. Local runs still need Python 3.11 or newer.
+
 ## [0.2.2] - 2026-09-28
 
 ### Fixed
@@ -81,6 +89,7 @@ Initial version, written offline; `design.md` §6 lists the external contracts t
   - the `compose.jaeger.yaml` override that adds Jaeger.
 - `README.md`, a walkthrough, and `design.md`, the design notes and verification checklist.
 
-[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/dcodev1702/python_fastapi_otel_poc/releases/tag/v0.2.1

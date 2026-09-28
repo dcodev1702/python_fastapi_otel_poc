@@ -57,7 +57,7 @@
   <g>
   <rect x="593" y="364" width="215" height="20" rx="10" fill="#0e1626" stroke="#334155" stroke-width="0.9"/>
   <text x="700.5" y="378" font-size="9" font-weight="700" letter-spacing="1" text-anchor="middle" fill="#cbd5e1">CONTAINER foundry-learn-agent</text>
-  <text x="583" y="378" font-size="10" text-anchor="end" fill="#6b7689">python:3.12-slim · non-root · 3 GB cap</text>
+  <text x="583" y="378" font-size="10" text-anchor="end" fill="#6b7689">python:3.14.7-slim · non-root · 3 GB cap</text>
   </g>
   <g>
   <rect x="112" y="398" width="340" height="446" rx="12" fill="#0e1626" fill-opacity="0.92" stroke="#a855f7" stroke-width="1.4" filter="url(#gviolet)"/>
@@ -66,7 +66,7 @@
   <text x="156" y="442" font-size="9" font-weight="700" letter-spacing="0.8" fill="#c4a5f5">UVICORN :8000 · APP.PY §5</text>
   <line x1="128" y1="456" x2="436" y2="456" stroke="#243150" stroke-width="1"/>
   <rect x="383" y="416" width="51" height="22" rx="11" fill="#1a1130" stroke="#7c3aed" stroke-width="0.8"/>
-  <text x="408.5" y="431" font-size="10" text-anchor="middle" fill="#cdb6f7">0.2.2</text>
+  <text x="408.5" y="431" font-size="10" text-anchor="middle" fill="#cdb6f7">0.2.3</text>
   <text x="130" y="478" font-size="9" font-weight="700" letter-spacing="0.6" fill="#7d8aa0">ROUTES</text>
   <circle cx="134" cy="491" r="2" fill="#a855f7"/>
   <text x="144" y="495" font-size="10.5" fill="#b8c2d2">GET / → 307 redirect to /docs</text>

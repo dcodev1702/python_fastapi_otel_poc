@@ -11,7 +11,7 @@ Description : A small FastAPI service for learning OpenTelemetry (OTEL) end to e
 
 Author      : dcodev1702 & M365 Copilot / Cowork
 Created     : 2026-09-28
-Version     : 0.2.2
+Version     : 0.2.3
 Python      : 3.11+
 Run (local) : uvicorn app:app --reload                                  -> http://127.0.0.1:8000/docs
 Run (Docker): docker compose up --build                                 -> http://localhost:8000/docs
@@ -83,7 +83,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 from pydantic import BaseModel, ConfigDict, Field
 
 SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "foundry-learn-agent")
-SERVICE_VERSION = "0.2.2"
+SERVICE_VERSION = "0.2.3"
 
 # =============================================================================
 # 1. OPENTELEMETRY SETUP

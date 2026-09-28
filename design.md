@@ -5,7 +5,7 @@
 | **Project** | Foundry Learn Agent — FastAPI + OpenTelemetry learning service with an LLM agent that uses the Microsoft Learn MCP server |
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
-| **Version** | 0.2.2 |
+| **Version** | 0.2.3 |
 | **Audience** | (1) the human maintainer; (2) a GenAI assistant **with internet access** that will finish verification |
 
 ---
@@ -64,7 +64,7 @@ CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI respo
 |---|---|---|
 | `app.py` | Entire application, 5 numbered sections | §1 OTEL setup (+ Step 4 commented), §2 MCP client, §3 agent, §4 health/`stats`, §5 API |
 | `requirements.txt` | Dependencies as **floors** | pip resolves newest compatible set at build; OTEL family lockstep enforced by pip |
-| `Dockerfile` | `python:3.12-slim`, non-root, pip upgraded before install, HEALTHCHECK on `/healthz` | `PYTHONUNBUFFERED=1` so spans + heartbeat reach `docker compose logs` |
+| `Dockerfile` | `python:3.14.7-slim`, non-root, pip upgraded before install, HEALTHCHECK on `/healthz` | `PYTHONUNBUFFERED=1` so spans + heartbeat reach `docker compose logs` |
 | `compose.yaml` | Console mode; API on `127.0.0.1:8000` (+ `LAN_IP`); `deploy.resources.limits.memory: 3g` | Linux host, Compose v2 |
 | `compose.jaeger.yaml` | Override: adds Jaeger all-in-one (UI on `127.0.0.1` + `LAN_IP`, OTLP/HTTP on `127.0.0.1` only), sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` | `docker compose -f compose.yaml -f compose.jaeger.yaml up --build` |
 | `.env.example` | Template for `.env` (`OPENAI_API_KEY`, optional knobs) | `.env` is git- and docker-ignored |
@@ -109,7 +109,7 @@ Resource: `service.name` (from `OTEL_SERVICE_NAME`, default `foundry-learn-agent
 ### `stats` snapshot (heartbeat line and `/healthz` body)
 
 ```json
-{"status":"ok","service":"foundry-learn-agent","version":"0.2.2","time":"<UTC ISO>","uptime_s":0,
+{"status":"ok","service":"foundry-learn-agent","version":"0.2.3","time":"<UTC ISO>","uptime_s":0,
  "exporter":"console|otlp[+azure-monitor]","model":"gpt-5.6-sol","rss_mb":25.6,
  "requests":{"/path":n},"errors":{"/path":n},"llm_turns":0,"tool_calls":0,
  "tokens":{"input_tokens":0,"output_tokens":0}}
@@ -210,7 +210,7 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 
 | # | Assumed | Where | Verify | If wrong |
 |---|---|---|---|---|
-| C1 | `python:3.12-slim` is current and appropriate (3.13-slim acceptable if all wheels exist). | `Dockerfile` | Docker Hub | Bump tag; keep `slim`. |
+| C1 | `python:3.14.7-slim` is current and appropriate. **Verified 2026-09-28:** moved up from `python:3.12-slim`; every dependency installs from a CPython 3.14 wheel (no compiler needed), and `/ping`, `/tools` and `/ask` pass with their OpenAI and Learn CLIENT spans. | `Dockerfile` | Docker Hub | Bump tag; keep `slim`. |
 | C2 | Compose v2 honours `deploy.resources.limits.memory` outside Swarm; `3g` is a valid byte value; `init: true`, top-level `name:` and `depends_on.condition: service_started` are valid. | `compose.yaml`, `compose.jaeger.yaml` | Compose spec | Fall back to `mem_limit: 3g` if limits are ignored (`docker stats` shows LIMIT). |
 | C3 | `jaegertracing/jaeger:latest` (Jaeger v2) runs all-in-one by default with OTLP receivers on 4317/4318 and UI on 16686. | `compose.jaeger.yaml`, README | Jaeger docs | Pin a version tag; if v1 semantics are needed use `jaegertracing/all-in-one` with `COLLECTOR_OTLP_ENABLED=true`. |
 | C4 | `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` is harmless with the HTTP exporter. | `compose.jaeger.yaml` | SDK docs | Remove if it causes a warning. |

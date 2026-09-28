@@ -4,7 +4,7 @@
 |---|---|
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
-| **Version** | 0.2.2 |
+| **Version** | 0.2.3 |
 | **Runs on** | Python 3.11+ locally, or Docker Compose on Linux (container capped at 3 GB RAM) |
 
 A small, runnable service for learning how OpenTelemetry (OTEL) tracing works in a Python API that drives an
@@ -45,7 +45,7 @@ Where each piece runs and what talks to what; the numbered flows are explained i
 |---|---|
 | `app.py` | The whole program in five numbered sections: OTEL setup (with **Step 4 / Azure Monitor built in, commented out**), Microsoft Learn MCP client, the agent (prompts + local loop + hosted variant), health + `stats` heartbeat, the API |
 | `requirements.txt` | Dependencies as *floors* — pip installs the newest compatible releases; the OTEL family stays in lockstep automatically |
-| `Dockerfile` | `python:3.12-slim`, non-root, pip upgraded before installing, health check on `/healthz` |
+| `Dockerfile` | `python:3.14.7-slim`, non-root, pip upgraded before installing, health check on `/healthz` |
 | `compose.yaml` | Console mode; the container is hard-capped at **3 GB** RAM |
 | `compose.jaeger.yaml` | Override that adds a Jaeger UI and ships spans to it |
 | `.env.example` | Copy to `.env`; holds `OPENAI_API_KEY` and optional knobs |
@@ -177,7 +177,7 @@ calls, OpenAI did. In Jaeger the trace collapses to `agent.run → llm.turn → 
 **6. Watch the heartbeat.** Every 60 s the log shows one line like
 
 ```
-[healthz] {"status": "ok", "service": "foundry-learn-agent", "version": "0.2.2", "time": "...", "uptime_s": 420,
+[healthz] {"status": "ok", "service": "foundry-learn-agent", "version": "0.2.3", "time": "...", "uptime_s": 420,
            "exporter": "console", "model": "gpt-5.6-sol", "rss_mb": 96.4,
            "requests": {"/healthz": 7, "/ping": 1, "/tools": 2, "/ask": 1, "/ask-hosted": 1}, "errors": {},
            "llm_turns": 4, "tool_calls": 5, "tokens": {"input_tokens": 18342, "output_tokens": 1210}}
