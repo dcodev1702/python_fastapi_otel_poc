@@ -250,6 +250,7 @@ class McpClient:
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 MAX_TURNS = 8  # safety valve so a confused model cannot loop (and bill you) forever
 
+# pylint: disable=line-too-long  # prompt text is what the model reads; re-wrapping it for a linter would change it
 SYSTEM_PROMPT = """\
 You are a research agent that answers questions about Microsoft products using official Microsoft Learn documentation.
 
@@ -269,6 +270,7 @@ Answer rules
 - Each link has a short title and points to a distinct learn.microsoft.com page that supports something you wrote.
 - Return only the JSON structure you were given, with no extra fields or commentary.
 """
+# pylint: enable=line-too-long
 
 USER_PROMPT_TEMPLATE = """\
 Topic: {topic}

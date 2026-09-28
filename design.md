@@ -70,6 +70,7 @@ CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI respo
 | `.env.example` | Template for `.env` (`OPENAI_API_KEY`, optional knobs) | `.env` is git- and docker-ignored |
 | `.dockerignore`, `.gitignore` | Keep `.env` out of the image and the repo | |
 | `.vscode/settings.json` | Editor only: Pylint and the Python extension use `${workspaceFolder}/.venv/bin/python` | Without `.venv`, VS Code flags every third-party import as unresolved |
+| `.pylintrc` | Pylint: `max-line-length=120`, the width the code is written to | Read by VS Code's Pylint extension and by `pylint app.py` run from the repo root |
 | `README.md` | User-facing guide: setup, walkthrough, exercises, troubleshooting | Depends on the contracts in §4–§5 |
 | `design.md` | This document | |
 | `CHANGELOG.md` | Notable changes, version by version | Keep a Changelog format; the version bumps only with behaviour (§0) |

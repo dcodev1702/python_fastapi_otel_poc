@@ -12,6 +12,9 @@ only when the application's behaviour changes (`design.md` §0).
 - `.vscode/settings.json`, which points Pylint and the Python extension at `${workspaceFolder}/.venv/bin/python`.
   Once you create the README's `.venv`, VS Code resolves the project's imports and stops reporting them as
   unresolved.
+- `.pylintrc` with `max-line-length=120`, the width the code is written to; Pylint's default of 100 flagged 118
+  lines. `SYSTEM_PROMPT` keeps its one 122-character line under a scoped `line-too-long` disable, because
+  re-wrapping it would change the text the model reads.
 
 ### Changed
 

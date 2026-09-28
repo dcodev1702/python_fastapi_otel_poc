@@ -1,0 +1,6 @@
+# Pylint settings for this repo. VS Code's Pylint extension (it runs from the workspace root) and a command-line
+# `pylint app.py` both read this file.
+
+[FORMAT]
+# The code is written to 120 columns; Pylint's default of 100 flags over a hundred lines of it.
+max-line-length=120

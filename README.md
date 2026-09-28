@@ -55,6 +55,7 @@ Where each piece runs and what talks to what; the numbered flows are explained i
 | `images/foundry-learn-agent-architecture-dark.svg` | The architecture diagram above (also in `design.md` §2) |
 | `.dockerignore`, `.gitignore` | Keep `.env` out of the image and the repo |
 | `.vscode/settings.json` | Points Pylint and the Python extension at `.venv` (see *Run it locally instead*) |
+| `.pylintrc` | Pylint settings: 120-column lines, the width the code is written to |
 
 ## Prerequisites
 
