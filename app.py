@@ -587,7 +587,7 @@ class ToolInfo(BaseModel):
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):  # pylint: disable=redefined-outer-name  # FastAPI passes this same app in
     """Startup: shared clients + heartbeat. Shutdown: stop heartbeat, close clients, flush the last spans."""
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError("Set OPENAI_API_KEY before starting the app")

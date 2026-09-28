@@ -126,6 +126,10 @@ pass this machine's LAN address, never `--host 0.0.0.0`. To use Jaeger from a lo
 (`docker compose -f compose.yaml -f compose.jaeger.yaml up jaeger`) and `export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`
 before starting uvicorn.
 
+**Editing in VS Code?** Select `.venv/bin/python` as the interpreter (**Python: Select Interpreter**) even if you
+only run the app in Docker. Otherwise Pylint and Pylance check `app.py` against a Python without these packages
+and flag every third-party import as unresolved.
+
 ## Configuration
 
 All optional; set in `.env` (Docker) or export in your shell (local).

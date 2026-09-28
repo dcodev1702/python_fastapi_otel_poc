@@ -13,6 +13,9 @@ only when the application's behaviour changes (`design.md` §0).
   (`query`, optional `language`). `GET /tools` now returns it alongside `microsoft_docs_search` and
   `microsoft_docs_fetch` (see the README's `/tools` step, `design.md` L2 and acceptance test 3). The agent already
   offers the model every listed tool, so its code and prompts are unchanged.
+- `lifespan(app)` carries a targeted `# pylint: disable=redefined-outer-name`: it is FastAPI's documented signature,
+  and the parameter is the module's own `app`. The README's local-run section explains the other false positives:
+  in VS Code, select the `.venv` interpreter, or Pylint reports every third-party import as unresolved.
 
 ## [0.2.3] - 2026-09-28
 
