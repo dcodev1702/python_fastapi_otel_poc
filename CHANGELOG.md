@@ -7,6 +7,13 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
+### Changed
+
+- The docs and the diagram list the Microsoft Learn MCP server's third tool, `microsoft_code_sample_search`
+  (`query`, optional `language`). `GET /tools` now returns it alongside `microsoft_docs_search` and
+  `microsoft_docs_fetch` (see the README's `/tools` step, `design.md` L2 and acceptance test 3). The agent already
+  offers the model every listed tool, so its code and prompts are unchanged.
+
 ## [0.2.3] - 2026-09-28
 
 ### Changed

@@ -180,7 +180,7 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 | # | Assumed | Where | Verify | If wrong |
 |---|---|---|---|---|
 | L1 | Endpoint **`https://learn.microsoft.com/api/mcp`**, Streamable HTTP transport, no auth. | `LEARN_MCP_URL` | Microsoft Learn MCP server docs / GitHub `MicrosoftDocs/mcp` | Update the default. |
-| L2 | Tool names **`microsoft_docs_search`** and **`microsoft_docs_fetch`**; search takes `query`, fetch takes `url`. | `SYSTEM_PROMPT`, `HOSTED_MCP_TOOL` comment, README | `GET /tools` output once running | Update names in the system prompt (rules 2–3) and the comment. |
+| L2 | Tool names **`microsoft_docs_search`** and **`microsoft_docs_fetch`**; search takes `query`, fetch takes `url`. **Verified 2026-09-28:** both exist, and the server now lists a third tool, **`microsoft_code_sample_search`** (`query`, optional `language`). `/ask` offers the model every listed tool and `/ask-hosted` has no `allowed_tools`, so the agent can call it; the system prompt directs only search and fetch, which is all a brief needs. | `SYSTEM_PROMPT`, `HOSTED_MCP_TOOL` comment, README | `GET /tools` output once running | Update names in the system prompt (rules 2–3) and the comment. |
 | L3 | JSON-RPC `initialize` with `protocolVersion: "2025-03-26"` is accepted; the server may answer as `application/json` **or** a one-shot `text/event-stream`; it may return `Mcp-Session-Id`, which must be echoed. | `McpClient.initialize()`, `_rpc()`, `_parse()` | MCP spec (Streamable HTTP) and the Learn server behaviour | Bump `protocolVersion`. If the server requires the `MCP-Protocol-Version` header on follow-up requests (added in the 2025-06-18 spec), add it to `headers` in `_rpc()`. |
 | L4 | `notifications/initialized` returns 202 with an empty body and needs no parsing. | `_rpc(notification=True)` | live call | If the server returns a body/other code, keep ignoring it — only raise on ≥400. |
 | L5 | Tool results arrive as `result.content[]` with `{"type":"text","text":...}` blocks. | `McpClient.call_tool()` | live call | Adjust extraction. |
@@ -246,7 +246,7 @@ curl -s localhost:8000/ping; sleep 6; docker compose logs api | grep -A3 '"name"
 # 3. Learn only (no tokens)
 curl -s localhost:8000/tools | python -m json.tool | head -30; sleep 6
 docker compose logs api | grep -o '"name": "mcp [^"]*"' | sort | uniq -c
-#    EXPECT: tools microsoft_docs_search + microsoft_docs_fetch; spans mcp initialize, mcp notifications/initialized, mcp tools/list
+#    EXPECT: tools microsoft_docs_search, microsoft_code_sample_search, microsoft_docs_fetch; spans mcp initialize, mcp notifications/initialized, mcp tools/list
 
 # 4. Local-tools agent
 curl -s -X POST localhost:8000/ask -H 'Content-Type: application/json' \

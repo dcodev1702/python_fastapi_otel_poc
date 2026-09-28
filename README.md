@@ -156,6 +156,8 @@ hits it every 60 s; watch `requests["/healthz"]` climb in the heartbeat while no
 children (`http receive`, `http send`). Compare its `trace_id` with the span JSON in the log.
 
 **3. `GET /tools` — outbound tracing for free.** Talks to Microsoft Learn only: **no OpenAI call, no tokens**.
+It returns the server's three tools with their JSON schemas: `microsoft_docs_search` (`query`),
+`microsoft_code_sample_search` (`query`, optional `language`) and `microsoft_docs_fetch` (`url`).
 You get the manual spans `mcp initialize`, `mcp notifications/initialized`, `mcp tools/list`, each with an
 automatic `POST` CLIENT child pointing at `learn.microsoft.com`. Hammer this one while you learn tracing.
 
