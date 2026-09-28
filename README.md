@@ -51,6 +51,7 @@ Where each piece runs and what talks to what; the numbered flows are explained i
 | `.env.example` | Copy to `.env`; holds `OPENAI_API_KEY` and optional knobs |
 | `design.md` | Design notes plus a verification checklist for an AI assistant with internet access (this project was written offline) |
 | `CHANGELOG.md` | Notable changes, version by version |
+| `LICENSE` | MIT License |
 | `images/foundry-learn-agent-architecture-dark.svg` | The architecture diagram above (also in `design.md` §2) |
 | `.dockerignore`, `.gitignore` | Keep `.env` out of the image and the repo |
 

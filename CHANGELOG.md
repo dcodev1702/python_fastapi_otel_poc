@@ -26,6 +26,7 @@ Documentation and repository setup; the application's behaviour is unchanged, so
   holds an empty `OPENAI_API_KEY` and the optional settings, commented out with their defaults.
 - A README troubleshooting entry for `ERR_CONNECTION_REFUSED` on `localhost:8000` when the browser runs on a
   different machine from Docker (for example VS Code Remote-SSH).
+- `LICENSE`: the MIT License, copyright 2026 DCODEV1702.
 - This changelog.
 
 ### Changed

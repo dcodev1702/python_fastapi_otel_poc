@@ -70,6 +70,7 @@ CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI respo
 | `README.md` | User-facing guide: setup, walkthrough, exercises, troubleshooting | Depends on the contracts in §4–§5 |
 | `design.md` | This document | |
 | `CHANGELOG.md` | Notable changes, version by version | Keep a Changelog format; the version bumps only with behaviour (§0) |
+| `LICENSE` | MIT License, copyright 2026 DCODEV1702 | Keep the text unmodified and without a header block, or GitHub stops detecting the license |
 | `images/foundry-learn-agent-architecture-dark.svg` | §2 architecture diagram | Dark-theme SVG; update it when components, endpoints or flows change |
 
 ## 4. Contracts that README.md depends on (do not change without updating README)
