@@ -13,10 +13,14 @@ What the fixtures give every test:
   * An `InMemorySpanExporter` attached to the app's own TracerProvider, so tests can assert the TRACE SHAPE -
     which spans exist, how they nest, what attributes they carry. The trace is this project's deliverable, so
     it is what the tests check.
+  * An `InMemoryMetricReader` and an `InMemoryLogRecordExporter`, installed as the global MeterProvider and
+    LoggerProvider BEFORE the app is imported. With OTEL_METRICS_EXPORTER / OTEL_LOGS_EXPORTER=none the app installs
+    no providers of its own, so its instruments, the FastAPI and httpx metrics and its logger all land here.
 
 Environment is pinned BEFORE `app` is imported (import-time configuration):
   OPENAI_API_KEY=test            lifespan refuses to start without one
   OTEL_TRACES_EXPORTER=none      no console/OTLP exporter; the tests add their own in-memory processor
+  OTEL_METRICS_EXPORTER=none     (and OTEL_LOGS_EXPORTER=none) - the in-memory providers below are used instead
   HEALTHZ_INTERVAL_SECONDS=0     no heartbeat task during tests
 """
 
@@ -25,7 +29,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from collections import deque
+from collections import defaultdict, deque
 from types import SimpleNamespace
 from typing import Any, Callable
 
@@ -34,16 +38,33 @@ import pytest
 
 os.environ.setdefault("OPENAI_API_KEY", "test-key-not-used")
 os.environ.setdefault("OTEL_TRACES_EXPORTER", "none")
+os.environ["OTEL_METRICS_EXPORTER"] = "none"  # forced: a shell with metrics/logs switched on must not leak in
+os.environ["OTEL_LOGS_EXPORTER"] = "none"
 os.environ.setdefault("HEALTHZ_INTERVAL_SECONDS", "0")
 os.environ.pop("TRACE_UI_URL", None)  # individual tests opt in with monkeypatch
 os.environ.pop("OTEL_EXPORTER_OTLP_ENDPOINT", None)
 
 # pylint: disable=wrong-import-position  # the environment above must be in place before app.py is imported
 from fastapi.testclient import TestClient  # noqa: E402
-from opentelemetry import trace  # noqa: E402
+from opentelemetry import _logs, metrics, trace  # noqa: E402
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor  # noqa: E402
+from opentelemetry.sdk._logs import LoggerProvider  # noqa: E402
+from opentelemetry.sdk._logs.export import InMemoryLogRecordExporter, SimpleLogRecordProcessor  # noqa: E402
+from opentelemetry.sdk.metrics import Counter, Histogram, MeterProvider  # noqa: E402
+from opentelemetry.sdk.metrics.export import AggregationTemporality, InMemoryMetricReader  # noqa: E402
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # noqa: E402
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter  # noqa: E402
+
+# DELTA temporality: every collection returns only what was measured since the previous one, so each test sees
+# exactly its own measurements (the metrics_data fixture collects once up front to start from zero).
+METRIC_READER = InMemoryMetricReader(
+    preferred_temporality={Counter: AggregationTemporality.DELTA, Histogram: AggregationTemporality.DELTA}
+)
+metrics.set_meter_provider(MeterProvider(metric_readers=[METRIC_READER]))
+LOG_EXPORTER = InMemoryLogRecordExporter()
+_log_provider = LoggerProvider()
+_log_provider.add_log_record_processor(SimpleLogRecordProcessor(LOG_EXPORTER))
+_logs.set_logger_provider(_log_provider)
 
 import app as app_module  # noqa: E402
 
@@ -243,6 +264,30 @@ def openai(fake_openai) -> FakeOpenAI:
     """Per test: a reset fake OpenAI client."""
     fake_openai.reset()
     return fake_openai
+
+
+@pytest.fixture()
+def metrics_data() -> Callable[[], dict[str, list[Any]]]:
+    """Per test: start from zero; return a callable that collects {metric name: [data points]} measured since."""
+
+    def collect() -> dict[str, list[Any]]:
+        points: dict[str, list[Any]] = defaultdict(list)
+        data = METRIC_READER.get_metrics_data()
+        for resource_metrics in data.resource_metrics if data else []:
+            for scope_metrics in resource_metrics.scope_metrics:
+                for metric in scope_metrics.metrics:
+                    points[metric.name].extend(metric.data.data_points)
+        return dict(points)
+
+    collect()  # DELTA temporality: this collection swallows whatever earlier tests measured
+    return collect
+
+
+@pytest.fixture()
+def logs() -> Callable[[], list[Any]]:
+    """Per test: start with an empty log exporter; return a callable that lists the OTel log records so far."""
+    LOG_EXPORTER.clear()
+    return lambda: [getattr(item, "log_record", item) for item in LOG_EXPORTER.get_finished_logs()]
 
 
 def wait_for_spans(get_spans: Callable[[], list[Any]], predicate: Callable[[list[Any]], bool], timeout: float = 2.0):

@@ -3,10 +3,11 @@
 # Author : dcodev1702 & M365 Copilot / Cowork
 # Created: 2026-09-29
 #
-# The same app, the same spans, a different UI: the standalone .NET Aspire Dashboard is an OTLP receiver for ANY
-# language that shows traces, metrics AND structured logs side by side. Jaeger stays the default trace UI (it is
-# the industry-standard waterfall and it can compare two traces); reach for this file when you add a
-# MeterProvider or LoggingInstrumentor and want all three signals in one place without Prometheus + Grafana.
+# The same app, a different UI: the standalone .NET Aspire Dashboard is an OTLP receiver for ANY language that shows
+# traces, metrics AND structured logs side by side - and this override switches the app's metrics and logs on, so
+# all three signals arrive. Jaeger stays the default trace UI (it is the industry-standard waterfall and it can
+# compare two traces); reach for this file to see the metrics and the logs next to the traces, without
+# Prometheus + Grafana.
 #
 #   docker compose -f compose.yaml -f compose.aspire.yaml up --build
 #   open http://localhost:18888   -> Traces / Structured logs / Metrics
@@ -20,6 +21,12 @@ services:
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire:18890    # the app exports OTLP over HTTP, so target the HTTP receiver
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      # Aspire stores all three signals, so switch metrics and logs on (Jaeger stores traces only). The exporters
+      # reuse the endpoint above and append /v1/metrics and /v1/logs. Metrics go out every 10 s instead of the SDK
+      # default of 60 s, so the charts move while you watch.
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: otlp
+      OTEL_METRIC_EXPORT_INTERVAL: "10000"
       # The trace_url link: LAN_IP from .env when set, so it opens from any machine on your LAN; else localhost.
       TRACE_UI_URL: ${TRACE_UI_URL:-http://${LAN_IP:-localhost}:18888/traces/detail/{trace_id}}
     depends_on:

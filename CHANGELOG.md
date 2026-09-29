@@ -7,19 +7,60 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-29
+
+The other two OpenTelemetry signals: metrics and structured logs, next to the traces. The Aspire Dashboard override
+switches them on and shows all three side by side. Jaeger mode and console mode stay traces-only, since Jaeger can't
+store metrics or logs. The minor version bump is because the `exporter` field of `/healthz` and the heartbeat changes
+shape.
+
+### Added
+
+- **Metrics** under the meter `foundry-learn-agent`. Names follow the semantic conventions where they exist:
+  - `gen_ai.client.token.usage`: tokens per LLM call, split by `gen_ai.token.type`;
+  - `gen_ai.client.operation.duration`: each LLM call, with `error.type` when it fails;
+  - `agent.tool.calls`: tool calls, local and hosted;
+  - `agent.tool.duration`: local tool calls only;
+  - `process.memory.usage`: resident memory.
+
+  The GenAI metrics use the conventions' recommended bucket boundaries. With metrics on, the FastAPI and httpx
+  instrumentations add `http.server.*` and `http.client.*` for free, and skip the excluded `/healthz`. Histograms
+  carry exemplars that link to their traces.
+- **Structured logs** from a `foundry_learn_agent` logger: one record per agent start, tool call, finish and
+  upstream failure, with the failure's exception attached. Each record carries the current trace and span ids, and
+  attributes such as `mcp.tool.name`, `agent.mode` and `error.type`. The same records print on stdout as
+  `[log] LEVEL message trace_id=…`.
+- `OTEL_METRICS_EXPORTER` and `OTEL_LOGS_EXPORTER` (`otlp`, `console` or off), and `OTEL_METRIC_EXPORT_INTERVAL`.
+  `compose.aspire.yaml` sets `otlp`, `otlp` and 10 s.
+- The `opentelemetry-instrumentation-logging` dependency, whose `LoggingHandler` replaces the SDK's, deprecated
+  in 1.45. The lock gains exactly this one pin.
+- `tests/test_metrics_and_logs.py`: 10 tests for the metrics, their values and attributes, and the log records and
+  their trace ids, all against in-memory providers (20 tests in total).
+- README: a *Metrics in this app* table, "Try it" step 7, exercise 11 and troubleshooting rows. `design.md`:
+  metrics and log-record contracts, decisions 13–15, and checklist items T9 and C8. C8 records that Jaeger v2
+  returns 404 for `/v1/metrics` and `/v1/logs`.
+
 ### Changed
 
+- **`exporter` in `/healthz` and the heartbeat is now an object**, `{"traces": …, "metrics": …, "logs": …}`,
+  instead of the traces exporter as a string. Read `exporter.traces` where you read `exporter` before.
+- `configure_opentelemetry()` is split into `configure_traces()`, `configure_metrics()` and `configure_logs()`.
+  The OTLP exporters are imported at the top of the file.
+- LLM calls go through `create_response()`, and local tool calls through `run_tool()`, which time, count and log
+  them. The prompts, the output schema and the hosted MCP tool sent to OpenAI are byte-for-byte unchanged.
 - The dependency files have their own directory, `requirements/`:
   - `requirements.txt` becomes `requirements/base.txt`, the floors you edit;
   - `requirements.lock.txt` becomes `requirements/lock.txt`, the pinned set the image installs;
   - `requirements-dev.txt` becomes `requirements/dev.txt`, the test and lint tools.
 
   The Dockerfile copies the directory; `scripts/lock.sh`, the Makefile, CI, `.dockerignore` and the docs use the
-  new paths. The lock was regenerated in place, and its 47 pins are unchanged.
+  new paths.
 - Step 4 (Azure Monitor): for Docker, uncomment the exporter in `requirements/base.txt` and run `make lock`
   before rebuilding. Since 0.3.0 the image installs the lock, so uncommenting the floor alone no longer reached
   the image. The README, `app.py`'s Step 4 comment and `requirements/base.txt` now say so. Also removed a stale
   `.gitignore` comment about generating the lock with `pip freeze`.
+- `.pylintrc` allows 1200-line modules (`app.py` is one teachable file by design). The scoped `line-too-long`
+  disable around `SYSTEM_PROMPT` is gone: Pylint's `useless-suppression` check showed it was never needed.
 
 ### Fixed
 
@@ -205,7 +246,8 @@ Initial version, written offline; `design.md` §6 lists the external contracts t
   - the `compose.jaeger.yaml` override that adds Jaeger.
 - `README.md`, a walkthrough, and `design.md`, the design notes and verification checklist.
 
-[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.2...v0.2.3

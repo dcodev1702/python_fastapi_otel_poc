@@ -81,6 +81,8 @@ jobs:
             sleep 1
           done
           curl -fsS http://127.0.0.1:8000/healthz | python3 -m json.tool
+          # Our logger is configured in the image: its startup line is printed before the app serves requests.
+          docker logs api 2>/dev/null | grep '^\[log\] INFO service started'
 
       - name: "/ping is traced: X-Trace-Id header, trace_id in the body, a GET /ping span in the log"
         run: |

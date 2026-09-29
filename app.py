@@ -9,13 +9,17 @@ Description : A small FastAPI service for learning OpenTelemetry (OTEL) end to e
                 POST /ask         local tools  - the tool loop runs HERE; every Learn call is a span you can see
                 POST /ask-hosted  hosted MCP   - OpenAI runs the tool loop; one opaque OpenAI span, far less code
 
+              Traces are always on. Metrics (token usage, LLM and tool latency, request rates, memory) and structured
+              logs (correlated to their trace) switch on per viewer: the Aspire override stores all three signals.
+
 Author      : dcodev1702 & M365 Copilot / Cowork
 Created     : 2026-09-28
-Version     : 0.3.0
+Version     : 0.4.0
 Python      : 3.14.7+
 Run (local) : uvicorn app:app --reload                                  -> http://127.0.0.1:8000/docs
 Run (Docker): docker compose up --build                                 -> http://localhost:8000/docs
-              docker compose -f compose.yaml -f compose.jaeger.yaml up --build   (+ Jaeger UI on :16686)
+              docker compose -f compose.yaml -f compose.jaeger.yaml up --build   (+ Jaeger UI on :16686, traces)
+              docker compose -f compose.yaml -f compose.aspire.yaml up --build   (+ Aspire on :18888, all 3 signals)
 
 Endpoints
     GET  /ping         the cheapest possible span: one request, one trace, returns its trace_id
@@ -57,7 +61,8 @@ Trace shape for POST /ask-hosted (hosted MCP)
                                                                         the mcp_call items in the response body.
 
 Layout of this file
-    1. OpenTelemetry setup       API vs SDK vs instrumentation. Step 4 (Azure Monitor) is built in, commented out.
+    1. OpenTelemetry setup       traces, metrics and logs: API vs SDK vs instrumentation; our metric instruments and
+                                 logger. Step 4 (Azure Monitor) is built in, commented out.
     2. Microsoft Learn MCP client
     3. The agent                 prompts, output contract, the local tool loop, the hosted variant
     4. Health + heartbeat        the `stats` counters - deliberately span-free
@@ -68,9 +73,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+import sys
 import time
 from collections import Counter
+from collections.abc import Iterable
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone
 from typing import Any, Literal
@@ -79,24 +87,39 @@ import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from openai import APIError, AsyncOpenAI
-from opentelemetry import trace
+from opentelemetry import metrics, trace
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPX2ClientInstrumentor, HTTPXClientInstrumentor
+from opentelemetry.instrumentation.logging.handler import LoggingHandler
+from opentelemetry.metrics import CallbackOptions, Observation
+from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor, ConsoleLogRecordExporter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import ConsoleMetricExporter, PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 from pydantic import BaseModel, ConfigDict, Field
 
 SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "foundry-learn-agent")
-SERVICE_VERSION = "0.3.0"
+SERVICE_VERSION = "0.4.0"
 
 # =============================================================================
-# 1. OPENTELEMETRY SETUP
+# 1. OPENTELEMETRY SETUP - three signals
 #
-#    API              = the interface everyone codes against (get_tracer, spans, attributes, events)
-#    SDK              = the implementation we configure here: Resource -> TracerProvider -> Processor -> Exporter
-#    Instrumentation  = plug-ins that create spans for frameworks/libraries we do not own (FastAPI, httpx)
+#    API              = the interface everyone codes against: tracers and spans, meters and instruments, loggers
+#    SDK              = the implementation we configure here: Resource -> Provider -> Processor/Reader -> Exporter
+#    Instrumentation  = plug-ins that create spans AND metrics for libraries we do not own (FastAPI, httpx)
 #
+#    Traces  = one request's path, hop by hop. Always on: console, or OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set.
+#    Metrics = numbers aggregated over time: rates, latency distributions, token usage. OTEL_METRICS_EXPORTER.
+#    Logs    = timestamped events, each stamped with the trace it happened in. OTEL_LOGS_EXPORTER.
+#
+#    Metrics and logs are off by default, because Jaeger stores traces only; compose.aspire.yaml switches both on.
 #    A provider fans out to EVERY processor added to it, which is why console, OTLP and Azure Monitor can all be
 #    switched on at the same time without touching a single line of application code.
 # =============================================================================
@@ -104,11 +127,11 @@ EXCLUDED_URLS = os.getenv(
     "OTEL_PYTHON_FASTAPI_EXCLUDED_URLS",
     "docs,openapi.json,redoc,healthz",  # comma-separated regexes; Swagger traffic and liveness probes are noise
 )
+SDK_PROVIDERS: list[Any] = []  # the metrics and logs providers installed below; the lifespan flushes them on exit
 
 
-def configure_opentelemetry() -> str:
-    """Wire the SDK and switch on outbound instrumentation. Returns the exporter mode for the health snapshot."""
-    resource = Resource.create({"service.name": SERVICE_NAME, "service.version": SERVICE_VERSION})
+def configure_traces(resource: Resource) -> str:
+    """TRACES: always collected. Returns where they go - "otlp", "console" or "none" - for the health snapshot."""
     provider = TracerProvider(resource=resource)
 
     if os.getenv("OTEL_TRACES_EXPORTER", "").lower() == "none":
@@ -119,9 +142,6 @@ def configure_opentelemetry() -> str:
         # Ship spans to Jaeger / an OTel Collector / the Aspire Dashboard over OTLP-HTTP, e.g.
         #   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318          (uvicorn on your machine)
         #   OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318             (inside docker compose)
-        # pylint: disable-next=import-outside-toplevel  # only OTLP mode needs it, like the Step 4 exporter below
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-
         provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))  # reads the env var, appends /v1/traces
         mode = "otlp"
     else:
@@ -161,18 +181,140 @@ def configure_opentelemetry() -> str:
     # --------------------------------------------------------------------------------------------------------
 
     trace.set_tracer_provider(provider)  # from here on, every API call (ours or a library's) routes into this SDK
-
-    # OUTBOUND: wrap the HTTP clients so every request becomes a CLIENT span and carries a W3C `traceparent`
-    # header. It takes two instrumentors: our McpClient uses httpx, but the OpenAI SDK (openai 3.x) is built on
-    # httpx2, a separate package - with the httpx one alone, every llm.turn span is missing its api.openai.com
-    # child. Do this BEFORE any httpx / OpenAI client is created - that is the safest ordering across versions.
-    HTTPXClientInstrumentor().instrument()
-    HTTPX2ClientInstrumentor().instrument()
     return mode
 
 
-EXPORTER_MODE = configure_opentelemetry()
+def configure_metrics(resource: Resource) -> str:
+    """METRICS: only when OTEL_METRICS_EXPORTER is "otlp" or "console". Returns that choice, or "none".
+
+    With "none" no metrics SDK is installed and every instrument is a cheap no-op - unless something else installed a
+    MeterProvider first (the tests do, with an in-memory reader). Instruments created before a provider exists are
+    upgraded when it arrives, so the order does not matter.
+    """
+    choice = os.getenv("OTEL_METRICS_EXPORTER", "none").lower()
+    if choice == "otlp":
+        exporter = OTLPMetricExporter()  # same OTEL_EXPORTER_OTLP_ENDPOINT as the spans; appends /v1/metrics
+    elif choice == "console":
+        exporter = ConsoleMetricExporter()
+    else:
+        return "none"
+    # The reader collects every instrument and exports every OTEL_METRIC_EXPORT_INTERVAL ms (SDK default: 60000).
+    provider = MeterProvider(resource=resource, metric_readers=[PeriodicExportingMetricReader(exporter)])
+    metrics.set_meter_provider(provider)
+    SDK_PROVIDERS.append(provider)
+    return choice
+
+
+def configure_logs(resource: Resource) -> str:
+    """LOGS: only when OTEL_LOGS_EXPORTER is "otlp" or "console". Returns that choice, or "none".
+
+    Our logger (configure_logging below) always writes plain lines to stdout; this adds the OpenTelemetry side, where
+    every record carries the trace_id and span_id that were current when it was logged.
+    """
+    choice = os.getenv("OTEL_LOGS_EXPORTER", "none").lower()
+    if choice == "otlp":
+        exporter = OTLPLogExporter()  # the same endpoint again; appends /v1/logs
+    elif choice == "console":
+        exporter = ConsoleLogRecordExporter()
+    else:
+        return "none"
+    provider = LoggerProvider(resource=resource)
+    provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
+    set_logger_provider(provider)
+    SDK_PROVIDERS.append(provider)
+    return choice
+
+
+def configure_opentelemetry() -> dict[str, str]:
+    """Wire the SDK for all three signals, then switch on outbound instrumentation.
+
+    Returns where each signal goes, for the health snapshot, e.g. {"traces": "otlp", "metrics": "otlp", "logs": "otlp"}.
+    """
+    resource = Resource.create({"service.name": SERVICE_NAME, "service.version": SERVICE_VERSION})
+    exporters = {
+        "traces": configure_traces(resource),
+        "metrics": configure_metrics(resource),
+        "logs": configure_logs(resource),
+    }
+
+    # OUTBOUND: wrap the HTTP clients so every request becomes a CLIENT span, carries a W3C `traceparent` header and
+    # (with metrics on) lands in http.client.duration. It takes two instrumentors: our McpClient uses httpx, but the
+    # OpenAI SDK (openai 3.x) is built on httpx2, a separate package - with the httpx one alone, every llm.turn span
+    # is missing its api.openai.com child. Do this BEFORE any httpx / OpenAI client is created - that is the safest
+    # ordering across versions.
+    HTTPXClientInstrumentor().instrument()
+    HTTPX2ClientInstrumentor().instrument()
+    return exporters
+
+
+class TraceIdFormatter(logging.Formatter):
+    """Plain stdout log lines that end with the current trace id, so a log line can be matched to its trace."""
+
+    def formatMessage(self, record: logging.LogRecord) -> str:
+        context = trace.get_current_span().get_span_context()
+        trace_id = format(context.trace_id, "032x") if context.is_valid else "-"
+        return f"{super().formatMessage(record)} trace_id={trace_id}"
+
+
+def configure_logging() -> logging.Logger:
+    """Our application logger: `[log] ...` lines on stdout, plus a bridge that turns each record into an OTel log.
+
+    The LoggingHandler hands every record to the global LoggerProvider - the one configure_logs installed, or a no-op
+    when logs are off - stamped with the current trace_id and span_id; `extra={...}` becomes the record's attributes.
+    """
+    logger = logging.getLogger("foundry_learn_agent")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False  # uvicorn configures its own loggers; keep ours self-contained
+    stdout = logging.StreamHandler(sys.stdout)
+    stdout.setFormatter(TraceIdFormatter("[log] %(levelname)s %(message)s"))
+    logger.addHandler(stdout)
+    logger.addHandler(LoggingHandler(level=logging.INFO))
+    return logger
+
+
+EXPORTERS = configure_opentelemetry()
 tracer = trace.get_tracer(SERVICE_NAME, SERVICE_VERSION)  # our handle for manual spans (this is the API side)
+meter = metrics.get_meter(SERVICE_NAME, SERVICE_VERSION)  # ...for our own metrics
+log = configure_logging()  # ...and for our own log records
+
+# Our own metrics. Names follow the OpenTelemetry semantic conventions where one exists (gen_ai.*, process.*); the
+# agent.* ones are ours. With metrics on, the FastAPI and httpx instrumentations add http.server.* and http.client.*
+# for free. The bucket boundaries are the ones the GenAI conventions recommend: token counts run from 1 to millions,
+# and LLM calls take seconds rather than the milliseconds the SDK's default buckets are made for.
+TOKEN_BUCKETS = [1, 4, 16, 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864]
+SECONDS_BUCKETS = [0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 2.56, 5.12, 10.24, 20.48, 40.96, 81.92]
+llm_token_usage = meter.create_histogram(
+    "gen_ai.client.token.usage",
+    unit="{token}",
+    description="Tokens per LLM call, by gen_ai.token.type (input or output)",
+    explicit_bucket_boundaries_advisory=TOKEN_BUCKETS,
+)
+llm_duration = meter.create_histogram(
+    "gen_ai.client.operation.duration",
+    unit="s",
+    description="Duration of each LLM call - one per llm.turn span",
+    explicit_bucket_boundaries_advisory=SECONDS_BUCKETS,
+)
+tool_call_count = meter.create_counter(
+    "agent.tool.calls", unit="{call}", description="Microsoft Learn tool calls, made here (/ask) or by OpenAI"
+)
+tool_duration = meter.create_histogram(
+    "agent.tool.duration",
+    unit="s",
+    description="Duration of each tool call made from this process (/ask only: hosted calls are not timed here)",
+    explicit_bucket_boundaries_advisory=SECONDS_BUCKETS,
+)
+
+
+def observe_memory(_options: CallbackOptions) -> Iterable[Observation]:
+    """Callback for process.memory.usage: the SDK calls it at every collection, so no timer of our own is needed."""
+    rss = current_rss_bytes()
+    return [] if rss is None else [Observation(rss)]
+
+
+meter.create_observable_up_down_counter(
+    "process.memory.usage", callbacks=[observe_memory], unit="By", description="Resident memory of this process"
+)
 
 
 # =============================================================================
@@ -263,7 +405,6 @@ class McpClient:
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 MAX_TURNS = 8  # safety valve so a confused model cannot loop (and bill you) forever
 
-# pylint: disable=line-too-long  # prompt text is what the model reads; re-wrapping it for a linter would change it
 SYSTEM_PROMPT = """\
 You are a research agent that answers questions about Microsoft products using official Microsoft Learn documentation.
 
@@ -283,7 +424,6 @@ Answer rules
 - Each link has a short title and points to a distinct learn.microsoft.com page that supports something you wrote.
 - Return only the JSON structure you were given, with no extra fields or commentary.
 """
-# pylint: enable=line-too-long
 
 USER_PROMPT_TEMPLATE = """\
 Topic: {topic}
@@ -387,8 +527,9 @@ def parse_arguments(raw: str | None) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {"_value": parsed}
 
 
-def record_usage(span: trace.Span, response: Any, totals: TokenUsage) -> None:
-    """Tokens are money: stamp them on the llm.turn span and accumulate them per request and per process."""
+def record_usage(span: trace.Span, response: Any, totals: TokenUsage, mode: AgentMode) -> None:
+    """Tokens are money: stamp them on the llm.turn span, total them per request and per process, and record them
+    in the gen_ai.client.token.usage histogram - one data point per token type."""
     stats.llm_turns += 1
     if response.usage is None:
         return
@@ -398,6 +539,58 @@ def record_usage(span: trace.Span, response: Any, totals: TokenUsage) -> None:
     totals.output_tokens += response.usage.output_tokens
     stats.tokens.input_tokens += response.usage.input_tokens
     stats.tokens.output_tokens += response.usage.output_tokens
+    attributes = {"gen_ai.request.model": OPENAI_MODEL, "agent.mode": mode}
+    llm_token_usage.record(response.usage.input_tokens, {**attributes, "gen_ai.token.type": "input"})
+    llm_token_usage.record(response.usage.output_tokens, {**attributes, "gen_ai.token.type": "output"})
+
+
+async def create_response(openai_client: AsyncOpenAI, mode: AgentMode, **request: Any) -> Any:
+    """One LLM call with the shared prompt and output contract, timed into gen_ai.client.operation.duration.
+
+    A failed call is timed too, with `error.type` set to the exception's class, so failures show up in the metric.
+    """
+    attributes = {"gen_ai.request.model": OPENAI_MODEL, "agent.mode": mode}
+    started = time.perf_counter()
+    try:
+        return await openai_client.responses.create(
+            model=OPENAI_MODEL, instructions=SYSTEM_PROMPT, text=BRIEF_TEXT_FORMAT, **request
+        )
+    except Exception as exc:
+        attributes["error.type"] = type(exc).__name__
+        raise
+    finally:
+        llm_duration.record(time.perf_counter() - started, attributes)
+
+
+async def run_tool(
+    mcp: McpClient, span: trace.Span, name: str, arguments: dict[str, Any]
+) -> tuple[str, ToolCallRecord]:
+    """One tool call for the local loop: run it, then count, time and log it. Returns the model's input and a record.
+
+    A failed call is not fatal: the error text goes back to the model, which decides what to do next, and the
+    exception is recorded on the agent.run span.
+    """
+    attributes = {"mcp.tool.name": name, "agent.mode": "local-tools"}
+    started = time.perf_counter()
+    error: str | None = None
+    try:
+        output = await mcp.call_tool(name, arguments)
+    except (httpx.HTTPError, RuntimeError) as exc:
+        error = str(exc)
+        attributes["error.type"] = type(exc).__name__
+        output = f"TOOL ERROR: {exc}"  # let the model see the failure and decide what to do next
+        span.record_exception(exc)  # ...but leave a record of it on the agent span
+    seconds = time.perf_counter() - started
+    tool_call_count.add(1, attributes)
+    tool_duration.record(seconds, attributes)
+    if error:
+        log.warning("tool %s failed after %.0f ms: %s", name, seconds * 1000, error, extra=attributes)
+    else:
+        log.info("tool %s returned %d chars in %.0f ms", name, len(output), seconds * 1000, extra=attributes)
+    record = ToolCallRecord(
+        tool=name, arguments=arguments, result_chars=len(output), duration_ms=round(seconds * 1000, 1), error=error
+    )
+    return output, record
 
 
 def finish_run(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # six facts per run
@@ -409,6 +602,11 @@ def finish_run(  # pylint: disable=too-many-arguments,too-many-positional-argume
     span.set_attribute("gen_ai.usage.input_tokens", usage.input_tokens)
     span.set_attribute("gen_ai.usage.output_tokens", usage.output_tokens)
     stats.tool_calls += len(records)
+    log.info(
+        "agent.run finished: turns=%d tool_calls=%d input_tokens=%d output_tokens=%d",
+        turns, len(records), usage.input_tokens, usage.output_tokens,
+        extra={"agent.mode": mode, "agent.turns": turns, "agent.tool_calls": len(records)},
+    )
     return AgentResult(mode=mode, brief=brief, turns=turns, usage=usage, tool_calls=records)
 
 
@@ -424,6 +622,7 @@ async def run_agent(openai_client: AsyncOpenAI, mcp: McpClient, user_prompt: str
     with tracer.start_as_current_span("agent.run") as span:
         span.set_attribute("agent.mode", "local-tools")
         span.set_attribute("gen_ai.request.model", OPENAI_MODEL)
+        log.info("agent.run started: local tools, model %s", OPENAI_MODEL, extra={"agent.mode": "local-tools"})
 
         await mcp.initialize()
         tools = to_openai_tools(await mcp.list_tools())
@@ -436,14 +635,8 @@ async def run_agent(openai_client: AsyncOpenAI, mcp: McpClient, user_prompt: str
         for turn in range(1, MAX_TURNS + 1):
             with tracer.start_as_current_span("llm.turn") as llm_span:
                 llm_span.set_attribute("agent.turn", turn)
-                response = await openai_client.responses.create(
-                    model=OPENAI_MODEL,
-                    instructions=SYSTEM_PROMPT,
-                    input=conversation,
-                    tools=tools,
-                    text=BRIEF_TEXT_FORMAT,
-                )
-                record_usage(llm_span, response, usage)
+                response = await create_response(openai_client, "local-tools", input=conversation, tools=tools)
+                record_usage(llm_span, response, usage, "local-tools")
 
             calls = [item for item in response.output if item.type == "function_call"]
             if not calls:  # no tool calls requested -> the model produced its final (JSON) answer
@@ -452,24 +645,8 @@ async def run_agent(openai_client: AsyncOpenAI, mcp: McpClient, user_prompt: str
 
             conversation.extend(response.output)  # keep the model's turn (incl. its tool calls) in the history
             for call in calls:
-                arguments = parse_arguments(call.arguments)
-                started = time.perf_counter()
-                error: str | None = None
-                try:
-                    output = await mcp.call_tool(call.name, arguments)
-                except (httpx.HTTPError, RuntimeError) as exc:
-                    error = str(exc)
-                    output = f"TOOL ERROR: {exc}"  # let the model see the failure and decide what to do next
-                    span.record_exception(exc)  # ...but leave a record of it on the agent span
-                records.append(
-                    ToolCallRecord(
-                        tool=call.name,
-                        arguments=arguments,
-                        result_chars=len(output),
-                        duration_ms=round((time.perf_counter() - started) * 1000, 1),
-                        error=error,
-                    )
-                )
+                output, record = await run_tool(mcp, span, call.name, parse_arguments(call.arguments))
+                records.append(record)
                 conversation.append({"type": "function_call_output", "call_id": call.call_id, "output": output})
 
         raise RuntimeError(f"agent did not finish within {MAX_TURNS} turns")
@@ -486,18 +663,13 @@ async def run_agent_hosted(openai_client: AsyncOpenAI, user_prompt: str) -> Agen
     with tracer.start_as_current_span("agent.run") as span:
         span.set_attribute("agent.mode", "hosted-mcp")
         span.set_attribute("gen_ai.request.model", OPENAI_MODEL)
+        log.info("agent.run started: hosted MCP, model %s", OPENAI_MODEL, extra={"agent.mode": "hosted-mcp"})
         usage = TokenUsage()
 
         with tracer.start_as_current_span("llm.turn") as llm_span:
             llm_span.set_attribute("agent.turn", 1)
-            response = await openai_client.responses.create(
-                model=OPENAI_MODEL,
-                instructions=SYSTEM_PROMPT,
-                input=user_prompt,
-                tools=[HOSTED_MCP_TOOL],
-                text=BRIEF_TEXT_FORMAT,
-            )
-            record_usage(llm_span, response, usage)
+            response = await create_response(openai_client, "hosted-mcp", input=user_prompt, tools=[HOSTED_MCP_TOOL])
+            record_usage(llm_span, response, usage, "hosted-mcp")
 
         # Reconstruct what happened from the output items OpenAI returns alongside the final message.
         records: list[ToolCallRecord] = []
@@ -506,8 +678,15 @@ async def run_agent_hosted(openai_client: AsyncOpenAI, user_prompt: str) -> Agen
                 span.set_attribute("agent.tools", [tool.name for tool in item.tools])
             elif item.type == "mcp_call":  # one per tool call OpenAI executed against Learn
                 error = str(item.error) if item.error else None
+                attributes = {"mcp.tool.name": item.name, "agent.mode": "hosted-mcp"}
                 if error:
+                    attributes["error.type"] = "mcp_call.error"
                     span.add_event("mcp_call.error", {"mcp.tool.name": item.name, "error": error})
+                    log.warning("hosted tool %s failed on OpenAI's side: %s", item.name, error, extra=attributes)
+                else:
+                    log.info("hosted tool %s ran on OpenAI's side (%d chars, not timed here)", item.name,
+                             len(item.output or ""), extra=attributes)
+                tool_call_count.add(1, attributes)  # counted, but no tool_duration: we never saw the call happen
                 records.append(
                     ToolCallRecord(
                         tool=item.name,
@@ -528,7 +707,9 @@ async def run_agent_hosted(openai_client: AsyncOpenAI, user_prompt: str) -> Agen
 #    Liveness probes run forever (Docker HEALTHCHECK, Kubernetes) and would flood a trace backend with worthless
 #    spans, so /healthz is excluded from instrumentation (see EXCLUDED_URLS). The heartbeat below only reads
 #    in-process counters and prints - it never makes a network call, so it cannot create a span either. Think of
-#    it as the control group: plain stdout next to the OTEL output, so you can see what each one is good for.
+#    it as the control group: plain stdout next to the OTEL output, so you can see what each one is good for. The
+#    OTEL metrics in section 1 count the same things properly - per model, per tool, as distributions - and can be
+#    charted; these counters only reset when the process restarts.
 # =============================================================================
 HEALTHZ_INTERVAL_SECONDS = float(os.getenv("HEALTHZ_INTERVAL_SECONDS", "60"))  # 0 disables the heartbeat
 
@@ -552,7 +733,7 @@ class Stats:  # pylint: disable=too-few-public-methods  # a plain bag of counter
             "version": SERVICE_VERSION,
             "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "uptime_s": round(time.time() - self.started_at),
-            "exporter": EXPORTER_MODE,
+            "exporter": dict(EXPORTERS),  # where each signal goes: {"traces": ..., "metrics": ..., "logs": ...}
             "model": OPENAI_MODEL,
             "rss_mb": current_rss_mb(),
             "requests": dict(self.requests),
@@ -566,16 +747,22 @@ class Stats:  # pylint: disable=too-few-public-methods  # a plain bag of counter
 stats = Stats()
 
 
-def current_rss_mb() -> float | None:
-    """Resident memory of this process - worth watching against the 3 GB cap in compose.yaml. Linux only."""
+def current_rss_bytes() -> int | None:
+    """Resident memory of this process in bytes (Linux only): feeds rss_mb and the process.memory.usage metric."""
     try:
         with open("/proc/self/status", encoding="utf-8") as status:
             for line in status:
                 if line.startswith("VmRSS:"):
-                    return round(int(line.split()[1]) / 1024, 1)  # kB -> MB
+                    return int(line.split()[1]) * 1024  # kB -> bytes
     except OSError:
         pass
     return None
+
+
+def current_rss_mb() -> float | None:
+    """Resident memory in MB for the status snapshot - worth watching against the 3 GB cap in compose.yaml."""
+    rss = current_rss_bytes()
+    return None if rss is None else round(rss / 1024 / 1024, 1)
 
 
 def print_health() -> None:
@@ -651,7 +838,12 @@ async def lifespan(app: FastAPI):  # pylint: disable=redefined-outer-name  # Fas
     app.state.openai = AsyncOpenAI()  # reads OPENAI_API_KEY; talks to OpenAI through its own httpx client
     heartbeat_task = asyncio.create_task(heartbeat()) if HEALTHZ_INTERVAL_SECONDS > 0 else None
     print_health()  # first status line immediately, then every HEALTHZ_INTERVAL_SECONDS
+    log.info(
+        "service started: model %s; traces -> %s, metrics -> %s, logs -> %s",
+        OPENAI_MODEL, EXPORTERS["traces"], EXPORTERS["metrics"], EXPORTERS["logs"],
+    )
     yield
+    log.info("service stopping")
     if heartbeat_task:
         heartbeat_task.cancel()
         with suppress(asyncio.CancelledError):
@@ -659,6 +851,8 @@ async def lifespan(app: FastAPI):  # pylint: disable=redefined-outer-name  # Fas
     await app.state.http.aclose()
     await app.state.openai.close()
     trace.get_tracer_provider().shutdown()  # flush the batch processor so the last spans are not lost
+    for provider in SDK_PROVIDERS:  # ...and the last metrics and log records
+        provider.shutdown()
 
 
 app = FastAPI(
@@ -734,6 +928,9 @@ def to_http_error(exc: Exception) -> HTTPException:
     else:
         reason = str(exc)
     trace_id = current_trace_id()
+    # One WARNING log per failure, with the exception attached: in Aspire's Structured logs it carries
+    # exception.type, exception.message and the stack trace, and links to the failed request's trace.
+    log.warning("upstream failure -> 502: %s", reason, exc_info=exc, extra={"error.type": type(exc).__name__})
     detail = ErrorDetail(error=reason, trace_id=trace_id, trace_url=trace_url_for(trace_id))
     return HTTPException(status_code=502, detail=detail.model_dump())
 

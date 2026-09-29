@@ -64,7 +64,7 @@ def test_healthz_is_not_traced(client, spans):
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["exporter"] == "none"
+    assert response.json()["exporter"]["traces"] == "none"
     assert "x-trace-id" not in {k.lower() for k in response.headers}, "an excluded URL must not carry a trace id"
     # give the exporter a moment to prove that nothing shows up
     assert server_spans(wait_for_spans(spans, lambda s: False, timeout=0.3)) == [], "/healthz must create no span"
@@ -330,3 +330,4 @@ def test_stats_snapshot_has_the_documented_shape(client):
     }
     assert isinstance(snapshot["llm_turns"], int) and isinstance(snapshot["tool_calls"], int)
     assert set(snapshot["tokens"]) == {"input_tokens", "output_tokens"}
+    assert snapshot["exporter"] == {"traces": "none", "metrics": "none", "logs": "none"}, "one entry per signal"

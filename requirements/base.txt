@@ -27,6 +27,7 @@ opentelemetry-instrumentation-fastapi>=0.65b0,<1    # inbound:  request -> SERVE
 # outbound: httpx AND httpx2 requests -> CLIENT span + traceparent header. scripts/lock.sh verifies that the
 # release it resolves really ships HTTPX2ClientInstrumentor (the OpenAI spans depend on it).
 opentelemetry-instrumentation-httpx>=0.65b0,<1
+opentelemetry-instrumentation-logging>=0.66b0,<1    # logs:     logging record -> OTel log record (the handler)
 
 # --- STEP 4 (optional): Azure Monitor / Application Insights ---------------------------------------------
 # Uncomment together with the Step 4 block in app.py, run `make lock` so the image installs it too, then set

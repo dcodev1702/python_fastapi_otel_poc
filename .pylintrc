@@ -9,3 +9,5 @@ source-roots=tests,.
 [FORMAT]
 # The code is written to 120 columns; Pylint's default of 100 flags over a hundred lines of it.
 max-line-length=120
+# app.py is one teachable file with numbered sections by design (design.md §3); the default limit is 1000 lines.
+max-module-lines=1200

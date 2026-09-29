@@ -5,8 +5,8 @@
 # Created: 2026-09-28
 #
 # Build & run through compose (see compose.yaml); direct use for reference:
-#   docker build -t foundry-learn-agent:0.3.0 .
-#   docker run --rm -p 127.0.0.1:8000:8000 --env-file .env --memory 3g foundry-learn-agent:0.3.0
+#   docker build -t foundry-learn-agent:0.4.0 .
+#   docker run --rm -p 127.0.0.1:8000:8000 --env-file .env --memory 3g foundry-learn-agent:0.4.0
 # =============================================================================
 FROM python:3.14.7-slim
 

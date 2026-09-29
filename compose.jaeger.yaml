@@ -12,6 +12,8 @@
 #   ...or click the `trace_url` in any API response (Swagger's "Try it out" shows it) to land on that exact trace.
 #
 # Trace shape comparison: call POST /ask and POST /ask-hosted once each, then open both traces side by side.
+# Metrics and logs stay off in this mode (OTEL_METRICS_EXPORTER / OTEL_LOGS_EXPORTER unset): Jaeger stores traces
+# only. compose.aspire.yaml switches all three signals on.
 # =============================================================================
 services:
   api:

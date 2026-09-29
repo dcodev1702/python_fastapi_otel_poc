@@ -5,7 +5,7 @@
 | **Project** | Foundry Learn Agent — FastAPI + OpenTelemetry learning service with an LLM agent that uses the Microsoft Learn MCP server |
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
-| **Version** | 0.3.0 |
+| **Version** | 0.4.0 |
 | **Audience** | (1) the human maintainer; (2) a GenAI assistant **with internet access** that will finish verification |
 
 ---
@@ -23,8 +23,8 @@ Your job:
    file + symbol where it lives, how to verify it, and what to change if the assumption is wrong.
 2. Change **only** what verification proves wrong. Do not restyle, rename or "improve" working code — the
    file layout, span names, attribute names and endpoint contracts in §4–§5 are load-bearing for `README.md`.
-3. If you can execute code: run `make check` (pylint + the trace-shape tests), then the **§7 acceptance tests**,
-   and report exact output, not a summary.
+3. If you can execute code: run `make check` (pylint + the trace, metrics and logs tests), then the **§7
+   acceptance tests**, and report exact output, not a summary.
 4. Keep the header block (Author / Created / Version) on every file and bump `Version` in `app.py`
    (`SERVICE_VERSION`), `compose.yaml` (image tag) and this file together if you change behaviour.
 5. Do **not** add security hardening, auth, rate limiting or secret scrubbing — this is an intro learning
@@ -41,13 +41,15 @@ Your job:
 Teach the OpenTelemetry (OTEL) pattern in Python by making one REST call produce one readable trace that spans
 an inbound request, an LLM agent loop, MCP tool calls and LLM calls — and show the same agent two ways so the
 trade-off between *local tools* (visible hops) and *hosted tools* (opaque hop) is visible in a trace viewer.
+Since 0.4.0 the same code also emits the other two OTEL signals, metrics and logs, so a viewer that stores all three
+(the Aspire Dashboard) shows the aggregate view and the event view next to the trace.
 
-Non-goals: production hardening, auth, multi-tenancy, persistence, metrics/logs pipelines (listed as next steps
-only).
+Non-goals: production hardening, auth, multi-tenancy, persistence, long-term metrics storage (Prometheus, Grafana)
+and log shipping beyond our own logger (listed as next steps only).
 
 ## 2. Architecture
 
-![Foundry Learn Agent architecture. An API client on the Linux host calls the FastAPI app in the foundry-learn-agent container. The local-tools agent (POST /ask) calls the Microsoft Learn MCP server and the OpenAI Responses API itself, so every hop is a span; the hosted-MCP agent (POST /ask-hosted) makes one OpenAI call, and OpenAI calls Learn outside our trace. The OpenTelemetry SDK exports spans to the container log by default, to Jaeger when compose.jaeger.yaml is used, and to Application Insights once the commented Step 4 is enabled; the health heartbeat prints to the same log without creating spans.](images/foundry-learn-agent-architecture-dark.svg)
+![Foundry Learn Agent architecture. An API client on the Linux host calls the FastAPI app in the foundry-learn-agent container. The local-tools agent (POST /ask) calls the Microsoft Learn MCP server and the OpenAI Responses API itself, so every hop is a span; the hosted-MCP agent (POST /ask-hosted) makes one OpenAI call, and OpenAI calls Learn outside our trace. The OpenTelemetry SDK exports spans to the container log by default, to Jaeger when compose.jaeger.yaml is used, and to Application Insights once the commented Step 4 is enabled; with compose.aspire.yaml it sends traces, metrics and logs to the Aspire Dashboard instead. The health heartbeat prints to the same log without creating spans.](images/foundry-learn-agent-architecture-dark.svg)
 
 ### Trace shapes (the teaching payload)
 
@@ -68,13 +70,13 @@ CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI respo
 | `requirements/lock.txt` | The pinned set the image installs | Produced by `scripts/lock.sh` (`make lock`, `make lock-upgrade`); never edited by hand |
 | `scripts/lock.sh` | Resolves the lock with `uv pip compile` inside the Dockerfile's base image, then verifies it | Deletes the lock and fails if `HTTPX2ClientInstrumentor` is missing or openai < 3 |
 | `requirements/dev.txt` | `pytest`, `pylint` | Local and CI only; kept out of the image |
-| `tests/conftest.py`, `tests/test_trace_shape.py`, `pytest.ini` | Trace-shape tests (§7) | Fake Learn MCP server under the real httpx client, scripted fake OpenAI client, in-memory span exporter |
+| `tests/conftest.py`, `tests/test_trace_shape.py`, `tests/test_metrics_and_logs.py`, `pytest.ini` | Trace-shape tests, plus metrics and logs tests (§7) | Fake Learn MCP server under the real httpx client, scripted fake OpenAI client, in-memory span exporter, metric reader and log exporter |
 | `Makefile` | Shortcuts: `venv`, `check`, `lock`, `up-jaeger`, `up-aspire`, … | `make` lists them |
 | `.github/workflows/ci.yml` | CI: pylint + tests; compose validation, image build, container smoke test | Runs on pushes to `main` and on pull requests; no secrets |
 | `Dockerfile` | `python:3.14.7-slim`, non-root, installs `requirements/lock.txt` (floors with a warning if absent), `pip check`, HEALTHCHECK on `/healthz` | `PYTHONUNBUFFERED=1` so spans + heartbeat reach `docker compose logs` |
 | `compose.yaml` | Console mode; API on `127.0.0.1:8000` (+ `LAN_IP`); `deploy.resources.limits.memory: 3g` | Linux host, Compose v2 |
 | `compose.jaeger.yaml` | Override: adds Jaeger all-in-one (UI on `127.0.0.1` + `LAN_IP`, OTLP/HTTP on `127.0.0.1` only), sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` and `TRACE_UI_URL` | `docker compose -f compose.yaml -f compose.jaeger.yaml up --build` |
-| `compose.aspire.yaml` | Alternative override: the .NET Aspire Dashboard (UI 18888 on `127.0.0.1` + `LAN_IP`, OTLP/HTTP 18890 on `127.0.0.1` only) | Use instead of the Jaeger override, with `--remove-orphans` when switching |
+| `compose.aspire.yaml` | Alternative override: the .NET Aspire Dashboard (UI 18888 on `127.0.0.1` + `LAN_IP`, OTLP/HTTP 18890 on `127.0.0.1` only), with metrics and logs switched on (`OTEL_METRICS_EXPORTER`/`OTEL_LOGS_EXPORTER=otlp`, 10 s metric interval) | Use instead of the Jaeger override, with `--remove-orphans` when switching |
 | `.env.example` | Template for `.env` (`OPENAI_API_KEY`, optional knobs) | `.env` is git- and docker-ignored |
 | `.dockerignore`, `.gitignore` | Keep `.env` out of the image and the repo | |
 | `.vscode/settings.json` | Editor only: Pylint and the Python extension use `${workspaceFolder}/.venv/bin/python`; pytest powers the Testing view | Without `.venv`, VS Code flags every third-party import as unresolved |
@@ -120,11 +122,36 @@ Swagger) carry none. `trace_url` fills the `TRACE_UI_URL` template and is `null`
 
 Resource: `service.name` (from `OTEL_SERVICE_NAME`, default `foundry-learn-agent`), `service.version`.
 
+### Metrics (meter `foundry-learn-agent`; on with `OTEL_METRICS_EXPORTER=otlp|console`)
+
+| Metric | Instrument, unit | Recorded | Attributes |
+|---|---|---|---|
+| `gen_ai.client.token.usage` | histogram, `{token}`; GenAI-convention buckets 1 … 67108864 | per LLM call, once per token type (`record_usage`) | `gen_ai.token.type` = `input`/`output`, `gen_ai.request.model`, `agent.mode` |
+| `gen_ai.client.operation.duration` | histogram, `s`; buckets 0.01 … 81.92 | per LLM call, success or failure (`create_response`) | `gen_ai.request.model`, `agent.mode`, `error.type` on failure |
+| `agent.tool.calls` | counter, `{call}` | per Learn tool call: local (`run_tool`) or hosted (`mcp_call` items) | `mcp.tool.name`, `agent.mode`, `error.type` on failure (`mcp_call.error` for hosted) |
+| `agent.tool.duration` | histogram, `s` | per local tool call only; hosted calls are never timed here | `mcp.tool.name`, `agent.mode`, `error.type` on failure |
+| `process.memory.usage` | observable up-down counter, `By` | resident memory, read at each collection (`observe_memory`) | — |
+| `http.server.*` / `http.client.*` | from the FastAPI and httpx instrumentations | per traced request / outbound call; the excluded URLs (`/healthz`, Swagger) get none | HTTP semconv (old or new names, `OTEL_SEMCONV_STABILITY_OPT_IN`) |
+
+### Log records (logger `foundry_learn_agent`; OTLP/console with `OTEL_LOGS_EXPORTER`, stdout always)
+
+| Body starts with | Level | Where | Attributes (besides trace and span ids) |
+|---|---|---|---|
+| `service started` / `service stopping` | INFO | `lifespan` | — |
+| `agent.run started: local tools` / `…: hosted MCP` | INFO | `run_agent`, `run_agent_hosted` | `agent.mode` |
+| `tool <name> returned` / `tool <name> failed` | INFO / WARNING | `run_tool` | `mcp.tool.name`, `agent.mode`, `error.type` |
+| `hosted tool <name> ran on OpenAI's side` / `… failed on OpenAI's side` | INFO / WARNING | `run_agent_hosted` | `mcp.tool.name`, `agent.mode`, `error.type` |
+| `agent.run finished: turns=… tool_calls=… input_tokens=… output_tokens=…` | INFO | `finish_run` | `agent.mode`, `agent.turns`, `agent.tool_calls` |
+| `upstream failure -> 502: <reason>` | WARNING | `to_http_error` | `error.type`, plus `exception.type`/`.message`/`.stacktrace` |
+
+On stdout each record prints as `[log] LEVEL message trace_id=<32 hex>` (`-` outside a request).
+
 ### `stats` snapshot (heartbeat line and `/healthz` body)
 
 ```json
-{"status":"ok","service":"foundry-learn-agent","version":"0.3.0","time":"<UTC ISO>","uptime_s":0,
- "exporter":"none|console|otlp[+azure-monitor]","model":"gpt-5.6-luna","rss_mb":25.6,
+{"status":"ok","service":"foundry-learn-agent","version":"0.4.0","time":"<UTC ISO>","uptime_s":0,
+ "exporter":{"traces":"none|console|otlp[+azure-monitor]","metrics":"none|console|otlp","logs":"none|console|otlp"},
+ "model":"gpt-5.6-luna","rss_mb":25.6,
  "requests":{"/path":n},"errors":{"/path":n},"llm_turns":0,"tool_calls":0,
  "tokens":{"input_tokens":0,"output_tokens":0}}
 ```
@@ -138,8 +165,11 @@ Nothing in this path may perform I/O that would create a span.
 | `OPENAI_API_KEY` | required | `lifespan` (fail fast) + OpenAI SDK |
 | `OPENAI_MODEL` | `gpt-5.6-luna` | `app.py` §3 `OPENAI_MODEL` |
 | `OTEL_SERVICE_NAME` | `foundry-learn-agent` | `SERVICE_NAME` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset → console | `configure_opentelemetry()` |
-| `OTEL_TRACES_EXPORTER` | unset | `configure_opentelemetry()`: `none` attaches no console/OTLP exporter (`exporter: "none"`); the tests use it |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset → console | `configure_traces()`; the OTLP metric and log exporters reuse it (`/v1/metrics`, `/v1/logs`) |
+| `OTEL_TRACES_EXPORTER` | unset | `configure_traces()`: `none` attaches no console/OTLP exporter (`exporter.traces: "none"`); the tests use it |
+| `OTEL_METRICS_EXPORTER` | unset → `none` | `configure_metrics()`: `otlp` or `console` installs a `MeterProvider`; `none` installs nothing (instruments stay no-ops) |
+| `OTEL_LOGS_EXPORTER` | unset → `none` | `configure_logs()`: `otlp` or `console` installs a `LoggerProvider`; stdout `[log]` lines print regardless |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `60000` (ms) | the SDK's `PeriodicExportingMetricReader`; `compose.aspire.yaml` sets `10000` |
 | `TRACE_UI_URL` | unset → `trace_url: null`; the Jaeger and Aspire overrides set it (`LAN_IP` or `localhost`) | `trace_url_for()`, read on every call |
 | `OTEL_PYTHON_FASTAPI_EXCLUDED_URLS` | `docs,openapi.json,redoc,healthz` | `EXCLUDED_URLS` |
 | `HEALTHZ_INTERVAL_SECONDS` | `60` | `HEALTHZ_INTERVAL_SECONDS` |
@@ -191,6 +221,21 @@ Nothing in this path may perform I/O that would create a span.
     `MockTransport` for Learn, instrumented with `instrument_client` because `instrument()` patches the real
     transport class), so real CLIENT spans are produced; OpenAI is a scripted fake, so no key, network or tokens
     are needed. CI runs the tests plus a container smoke test on every push.
+13. **Metrics and logs only where they can be stored.** Traces are always on. Metrics and logs switch on per
+    viewer with the standard `OTEL_METRICS_EXPORTER` / `OTEL_LOGS_EXPORTER` (the Aspire override sets both to
+    `otlp`), because Jaeger stores traces only and answers `/v1/metrics` and `/v1/logs` with 404. When off, the app
+    installs no `MeterProvider` or `LoggerProvider`: instruments created from the API stay no-ops and upgrade if a
+    provider arrives later. That is also how the tests install in-memory providers before importing the app.
+14. **Names from the semantic conventions where they exist.** `gen_ai.client.token.usage` and
+    `gen_ai.client.operation.duration` follow the GenAI conventions, with their recommended bucket boundaries,
+    because token counts span 1 to millions and LLM calls take seconds. `process.memory.usage` and `error.type`
+    are conventions too. Only `agent.tool.*` is ours. The `stats` counters stay as the span-free control group;
+    the metrics count the same things properly.
+15. **Logs are events on the trace's timeline.** Our `foundry_learn_agent` logger writes one record per agent
+    start, tool call and finish, and per upstream failure (with the exception attached). The
+    `opentelemetry-instrumentation-logging` `LoggingHandler` stamps each record with the current trace and span
+    ids and turns `extra={...}` into attributes; the SDK's own `LoggingHandler` is deprecated in 1.45. The same
+    records print on stdout ending in `trace_id=…`, so even console mode correlates.
 
 ## 6. VERIFICATION CHECKLIST — assumptions made without internet access
 
@@ -230,6 +275,7 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 | T6 | Semantic-convention attribute names on auto spans are either `http.method/http.url/http.status_code` or `http.request.method/url.full/http.response.status_code`. | README "Reading the console output" | Run `/ping` once | Update README wording. |
 | T7 | `trace.get_tracer_provider().shutdown()` flushes `BatchSpanProcessor`. | `lifespan` | SDK docs | Use `provider.force_flush()` then `shutdown()`. |
 | T8 | `HTTPXClientInstrumentor().instrument()` patches the real transport class (`httpx.AsyncHTTPTransport.handle_async_request`), not `httpx.MockTransport`; `HTTPXClientInstrumentor.instrument_client(client)` wraps any client's transport with the same wrapper. **Verified 2026-09-29** (instrumentation 0.66b0): the test fixture instruments its MockTransport client this way, and the tests see real CLIENT spans and injected `traceparent`. | `tests/conftest.py` `client` | `pytest -q` (the `/tools` and `/ask` tests) | If CLIENT spans disappear after an upgrade, check how `instrument()` / `instrument_client()` patch in the new release. |
+| T9 | Metrics and logs API/SDK in 1.45: `MeterProvider` + `PeriodicExportingMetricReader` (honours `OTEL_METRIC_EXPORT_INTERVAL`), `LoggerProvider` + `BatchLogRecordProcessor` in `opentelemetry.sdk._logs`, `OTLPMetricExporter` / `OTLPLogExporter` in the OTLP-HTTP exporter package, `create_histogram(..., explicit_bucket_boundaries_advisory=...)`; instruments and handlers created before a provider is installed are upgraded when it is. The SDK's `LoggingHandler` is deprecated: use `opentelemetry.instrumentation.logging.handler.LoggingHandler` (0.66b0). **Verified 2026-09-29** with a probe, the tests (run with DeprecationWarning as an error) and a live Aspire run. | `configure_metrics()`, `configure_logs()`, `configure_logging()`, instruments in §1 | `pytest -q -W error::DeprecationWarning` | Follow the renames the deprecation warnings name. |
 
 ### 6.4 Step 4 — Azure Monitor (commented code; verify so it works when uncommented)
 
@@ -251,6 +297,7 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 | C5 | `python -c "urllib.request.urlopen(...)"` works as HEALTHCHECK in slim (no curl). | `Dockerfile`, `compose.yaml` | `docker inspect --format '{{json .State.Health}}'` | Adjust. |
 | C6 | `mcr.microsoft.com/dotnet/aspire-dashboard:latest` serves its UI on 18888 and OTLP/gRPC and OTLP/HTTP on 18889 and 18890 by default; `ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true` disables the login token; a trace opens at `/traces/detail/{trace_id}`. **Verified 2026-09-29** against aspire.dev/dashboard/standalone and a live run: spans arrive over OTLP/HTTP, and a `trace_url` opens "Aspire trace (foundry-learn-agent: GET /tools)" with all its spans. | `compose.aspire.yaml` | Aspire dashboard docs; one live run | Fix the env var names or ports; pin the image tag if `latest` changes behaviour. |
 | C7 | Compose resolves nested defaults such as `${TRACE_UI_URL:-http://${LAN_IP:-localhost}:16686/trace/{trace_id}}`, and leaves `{trace_id}` (no `$`) alone. **Verified 2026-09-29** with Compose 2.40.3: unset → `localhost`, `LAN_IP` → that address, `TRACE_UI_URL` → itself. | `compose.jaeger.yaml`, `compose.aspire.yaml` | `docker compose … config` | Set `TRACE_UI_URL` explicitly in `.env`. |
+| C8 | The Aspire Dashboard stores metrics and logs sent to its OTLP/HTTP receiver, and Jaeger v2 does not (`/v1/metrics` and `/v1/logs` return 404; `/v1/traces` returns 200). **Verified 2026-09-29:** in Aspire mode the Metrics page lists all five of our instruments plus `http.server.*` / `http.client.*`, histograms show exemplars that open traces, and Structured logs shows every record with its trace link; a throwaway Jaeger returned 404 for metrics and logs. | `compose.aspire.yaml`, `compose.jaeger.yaml` | one live run of each | Keep metrics and logs off in Jaeger mode. |
 
 ### 6.6 FastAPI / Pydantic
 
@@ -267,7 +314,7 @@ Prereqs: Docker on Linux, `.env` with a valid `OPENAI_API_KEY`. Run the offline 
 ```bash
 # -1. Offline: lint + trace-shape tests (no network, no key, no tokens)
 make venv && make check
-#    EXPECT: pylint 10.00/10 for app.py and tests; "10 passed"
+#    EXPECT: pylint 10.00/10 for app.py and tests; "20 passed"
 
 # 0. Build + start (console mode)
 cp .env.example .env && $EDITOR .env
@@ -320,9 +367,13 @@ ss -ltn | grep -E ':(8000|16686|4318) '
 # 9. Aspire mode (optional), then back to Jaeger
 docker compose -f compose.yaml -f compose.aspire.yaml up -d --remove-orphans; curl -s localhost:8000/tools >/dev/null
 curl -s localhost:8000/ping | python3 -m json.tool      # open its trace_url
+#    repeat step 4, wait 10 s, then open Aspire's Metrics and Structured logs pages
 docker compose -f compose.yaml -f compose.jaeger.yaml up -d --remove-orphans
-#    EXPECT: trace_url -> http://<LAN_IP or localhost>:18888/traces/detail/<trace_id> showing the trace; 18888 on
-#            127.0.0.1 (+ LAN_IP), 18890 on 127.0.0.1 only
+#    EXPECT: /healthz exporter == {"traces": "otlp", "metrics": "otlp", "logs": "otlp"}; trace_url ->
+#            http://<LAN_IP or localhost>:18888/traces/detail/<trace_id> showing the trace; Metrics lists
+#            gen_ai.client.token.usage, gen_ai.client.operation.duration, agent.tool.calls, agent.tool.duration,
+#            process.memory.usage and http.*; Structured logs shows "agent.run started/finished" and "tool ..."
+#            records linked to their trace; 18888 on 127.0.0.1 (+ LAN_IP), 18890 on 127.0.0.1 only
 ```
 
 ## 8. What was verified offline (already done — do not repeat)
@@ -335,15 +386,15 @@ docker compose -f compose.yaml -f compose.jaeger.yaml up -d --remove-orphans
   accumulation, `to_http_error` mapping, route registration.
 - Not verified: anything involving a real network call, real package versions, real container runtime.
 - Since 0.3.0 the `tests/` suite automates most of the stub checks above against the real libraries (the fakes sit
-  below the real FastAPI and httpx instrumentation), and CI runs it on every push.
+  below the real FastAPI and httpx instrumentation), and CI runs it on every push. Since 0.4.0 it also covers the
+  metrics and the log records (20 tests).
 
 ## 9. Extension points (after verification)
 
-1. **Metrics** — add a `MeterProvider` in `configure_opentelemetry()`; FastAPI instrumentation then emits
-   request duration / active requests with no further code. Consider exporting the `stats` counters as OTEL
-   metrics to show the "print vs telemetry" convergence. `compose.aspire.yaml` shows metrics next to the traces.
-2. **Logs** — inject `trace_id`/`span_id` into `logging` records (`opentelemetry-instrumentation-logging`) and
-   replace `print_health()` with a logger while keeping stdout as the sink.
+1. **Metrics beyond Aspire** — metrics already flow over OTLP (0.4.0). Route them through an OTel Collector to
+   Prometheus and chart them in Grafana, or add an `AzureMonitorMetricExporter` next to Step 4's trace exporter.
+2. **More logs** — attach the same `LoggingHandler` to `uvicorn.access` or `httpx` (one line each; noisy), or turn
+   the `[healthz]` heartbeat into a log record while keeping stdout as the sink.
 3. **Distributed tracing demo** — a second tiny FastAPI service that the agent calls; the injected `traceparent`
    makes both services appear in one Jaeger trace.
 4. **Azure Monitor (Step 4)** — uncomment; the same spans appear in Application Insights.
