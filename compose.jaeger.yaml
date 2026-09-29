@@ -4,10 +4,12 @@
 # Created: 2026-09-28
 #
 # An OVERRIDE file: it is merged on top of compose.yaml and (1) adds a Jaeger all-in-one, (2) points the API's
-# OTLP exporter at it. Nothing in app.py changes - the exporter is chosen by one environment variable.
+# OTLP exporter at it, (3) tells the API how to build a clickable link into the Jaeger UI for every trace.
+# Nothing in app.py changes - the exporter is chosen by one environment variable.
 #
 #   docker compose -f compose.yaml -f compose.jaeger.yaml up --build
 #   open http://localhost:16686   -> service "foundry-learn-agent" -> Find Traces
+#   ...or click the `trace_url` in any API response (Swagger's "Try it out" shows it) to land on that exact trace.
 #
 # Trace shape comparison: call POST /ask and POST /ask-hosted once each, then open both traces side by side.
 # =============================================================================
@@ -16,6 +18,10 @@ services:
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318     # service name = DNS name on the compose network
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      # Template for the trace_url field in API responses (and in 502 bodies); the app fills in {trace_id}. The
+      # link uses LAN_IP from .env when it is set, so it opens from any machine on your LAN; otherwise
+      # localhost, which works in a browser on this host. Set TRACE_UI_URL in .env to override it entirely.
+      TRACE_UI_URL: ${TRACE_UI_URL:-http://${LAN_IP:-localhost}:16686/trace/{trace_id}}
     depends_on:
       jaeger:
         condition: service_started

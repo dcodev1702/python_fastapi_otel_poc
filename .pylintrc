@@ -1,5 +1,10 @@
 # Pylint settings for this repo. VS Code's Pylint extension (it runs from the workspace root) and a command-line
-# `pylint app.py` both read this file.
+# `pylint app.py tests` both read this file.
+
+[MAIN]
+# Import roots, as pytest sees them: tests/ (for `from conftest import ...`) and the repository root (for
+# `import app`; pytest.ini sets `pythonpath = .`). Order matters: tests first.
+source-roots=tests,.
 
 [FORMAT]
 # The code is written to 120 columns; Pylint's default of 100 flags over a hundred lines of it.

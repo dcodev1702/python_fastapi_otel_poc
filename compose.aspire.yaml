@@ -1,0 +1,44 @@
+# =============================================================================
+# Foundry Learn Agent - Aspire Dashboard override (ALTERNATIVE to compose.jaeger.yaml, not in addition to it)
+# Author : dcodev1702 & M365 Copilot / Cowork
+# Created: 2026-09-29
+#
+# The same app, the same spans, a different UI: the standalone .NET Aspire Dashboard is an OTLP receiver for ANY
+# language that shows traces, metrics AND structured logs side by side. Jaeger stays the default trace UI (it is
+# the industry-standard waterfall and it can compare two traces); reach for this file when you add a
+# MeterProvider or LoggingInstrumentor and want all three signals in one place without Prometheus + Grafana.
+#
+#   docker compose -f compose.yaml -f compose.aspire.yaml up --build
+#   open http://localhost:18888   -> Traces / Structured logs / Metrics
+#
+# The image serves its UI on 18888 and receives OTLP/gRPC on 18889 and OTLP/HTTP on 18890 (defaults documented at
+# https://aspire.dev/dashboard/standalone/). The app exports OTLP/HTTP, so it targets 18890. `latest` is a moving
+# target, like jaegertracing/jaeger:latest - pin a tag if you need repeatable runs.
+# =============================================================================
+services:
+  api:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire:18890    # the app exports OTLP over HTTP, so target the HTTP receiver
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      # The trace_url link: LAN_IP from .env when set, so it opens from any machine on your LAN; else localhost.
+      TRACE_UI_URL: ${TRACE_UI_URL:-http://${LAN_IP:-localhost}:18888/traces/detail/{trace_id}}
+    depends_on:
+      aspire:
+        condition: service_started
+
+  aspire:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    container_name: foundry-aspire
+    environment:
+      # Local learning only: no login token. This also opens the dashboard's telemetry API, the same exposure as
+      # Jaeger's - which is why the UI is published on 127.0.0.1 and your LAN only, never 0.0.0.0.
+      ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:                                                # IPv4 only, like the API in compose.yaml
+      - "127.0.0.1:18888:18888"                           # dashboard UI
+      - "${LAN_IP:-127.0.0.1}:18888:18888"                # ...also on your LAN when .env sets LAN_IP
+      - "127.0.0.1:18890:18890"                           # OTLP/HTTP, so `uvicorn` on this host can send; never on the LAN
+    deploy:
+      resources:
+        limits:
+          memory: 1g                                      # in-memory, capped per resource; enough for learning
+    restart: unless-stopped

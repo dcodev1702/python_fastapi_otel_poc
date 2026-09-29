@@ -5,7 +5,7 @@
 | **Project** | Foundry Learn Agent — FastAPI + OpenTelemetry learning service with an LLM agent that uses the Microsoft Learn MCP server |
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
-| **Version** | 0.2.4 |
+| **Version** | 0.3.0 |
 | **Audience** | (1) the human maintainer; (2) a GenAI assistant **with internet access** that will finish verification |
 
 ---
@@ -23,7 +23,8 @@ Your job:
    file + symbol where it lives, how to verify it, and what to change if the assumption is wrong.
 2. Change **only** what verification proves wrong. Do not restyle, rename or "improve" working code — the
    file layout, span names, attribute names and endpoint contracts in §4–§5 are load-bearing for `README.md`.
-3. If you can execute code: run the **§7 acceptance tests** and report exact output, not a summary.
+3. If you can execute code: run `make check` (pylint + the trace-shape tests), then the **§7 acceptance tests**,
+   and report exact output, not a summary.
 4. Keep the header block (Author / Created / Version) on every file and bump `Version` in `app.py`
    (`SERVICE_VERSION`), `compose.yaml` (image tag) and this file together if you change behaviour.
 5. Do **not** add security hardening, auth, rate limiting or secret scrubbing — this is an intro learning
@@ -63,14 +64,21 @@ CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI respo
 | File | Role | Notes |
 |---|---|---|
 | `app.py` | Entire application, 5 numbered sections | §1 OTEL setup (+ Step 4 commented), §2 MCP client, §3 agent, §4 health/`stats`, §5 API |
-| `requirements.txt` | Dependencies as **floors** | pip resolves newest compatible set at build; OTEL family lockstep enforced by pip |
-| `Dockerfile` | `python:3.14.7-slim`, non-root, pip upgraded before install, HEALTHCHECK on `/healthz` | `PYTHONUNBUFFERED=1` so spans + heartbeat reach `docker compose logs` |
+| `requirements.txt` | Dependencies as **floors**: the intent | Edit this file; OTEL family lockstep enforced by pip |
+| `requirements.lock.txt` | The pinned set the image installs | Produced by `scripts/lock.sh` (`make lock`, `make lock-upgrade`); never edited by hand |
+| `scripts/lock.sh` | Resolves the lock with `uv pip compile` inside the Dockerfile's base image, then verifies it | Deletes the lock and fails if `HTTPX2ClientInstrumentor` is missing or openai < 3 |
+| `requirements-dev.txt` | `pytest`, `pylint` | Local and CI only; kept out of the image |
+| `tests/conftest.py`, `tests/test_trace_shape.py`, `pytest.ini` | Trace-shape tests (§7) | Fake Learn MCP server under the real httpx client, scripted fake OpenAI client, in-memory span exporter |
+| `Makefile` | Shortcuts: `venv`, `check`, `lock`, `up-jaeger`, `up-aspire`, … | `make` lists them |
+| `.github/workflows/ci.yml` | CI: pylint + tests; compose validation, image build, container smoke test | Runs on pushes to `main` and on pull requests; no secrets |
+| `Dockerfile` | `python:3.14.7-slim`, non-root, installs `requirements.lock.txt` (floors with a warning if absent), `pip check`, HEALTHCHECK on `/healthz` | `PYTHONUNBUFFERED=1` so spans + heartbeat reach `docker compose logs` |
 | `compose.yaml` | Console mode; API on `127.0.0.1:8000` (+ `LAN_IP`); `deploy.resources.limits.memory: 3g` | Linux host, Compose v2 |
-| `compose.jaeger.yaml` | Override: adds Jaeger all-in-one (UI on `127.0.0.1` + `LAN_IP`, OTLP/HTTP on `127.0.0.1` only), sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` | `docker compose -f compose.yaml -f compose.jaeger.yaml up --build` |
+| `compose.jaeger.yaml` | Override: adds Jaeger all-in-one (UI on `127.0.0.1` + `LAN_IP`, OTLP/HTTP on `127.0.0.1` only), sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` and `TRACE_UI_URL` | `docker compose -f compose.yaml -f compose.jaeger.yaml up --build` |
+| `compose.aspire.yaml` | Alternative override: the .NET Aspire Dashboard (UI 18888 on `127.0.0.1` + `LAN_IP`, OTLP/HTTP 18890 on `127.0.0.1` only) | Use instead of the Jaeger override, with `--remove-orphans` when switching |
 | `.env.example` | Template for `.env` (`OPENAI_API_KEY`, optional knobs) | `.env` is git- and docker-ignored |
 | `.dockerignore`, `.gitignore` | Keep `.env` out of the image and the repo | |
-| `.vscode/settings.json` | Editor only: Pylint and the Python extension use `${workspaceFolder}/.venv/bin/python` | Without `.venv`, VS Code flags every third-party import as unresolved |
-| `.pylintrc` | Pylint: `max-line-length=120`, the width the code is written to | Read by VS Code's Pylint extension and by `pylint app.py` run from the repo root |
+| `.vscode/settings.json` | Editor only: Pylint and the Python extension use `${workspaceFolder}/.venv/bin/python`; pytest powers the Testing view | Without `.venv`, VS Code flags every third-party import as unresolved |
+| `.pylintrc` | Pylint: `max-line-length=120`, the width the code is written to; `source-roots=tests,.` so the tests' imports resolve | Read by VS Code's Pylint extension and by `pylint app.py tests` run from the repo root |
 | `README.md` | User-facing guide: setup, walkthrough, exercises, troubleshooting | Depends on the contracts in §4–§5 |
 | `design.md` | This document | |
 | `CHANGELOG.md` | Notable changes, version by version | Keep a Changelog format; the version bumps only with behaviour (§0) |
@@ -84,7 +92,7 @@ CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI respo
 | Method/path | Traced? | Purpose | Response |
 |---|---|---|---|
 | `GET /` | no (redirect) | → `/docs` | 307 |
-| `GET /ping` | **yes** | cheapest span | `{"pong": true, "trace_id": "<32 hex>"}` |
+| `GET /ping` | **yes** | cheapest span | `{"pong": true, "trace_id": "<32 hex>", "trace_url": "<link>"|null}` |
 | `GET /healthz` | **no** (in `EXCLUDED_URLS`) | liveness; same JSON the heartbeat prints | `stats.snapshot()` |
 | `GET /tools` | yes | Learn MCP `initialize` + `tools/list`; no OpenAI call | `[{name, description, parameters}]` |
 | `POST /ask` | yes | agent, local tool loop | `AskResponse` |
@@ -93,8 +101,12 @@ CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI respo
 `AskRequest`: `{topic: str = "Microsoft Foundry", paragraphs: int 1..5 = 2, links: int 1..10 = 3}`
 `AskResponse`: `{mode: "local-tools"|"hosted-mcp", brief: {paragraphs: [str], links: [{title, url}]}, turns: int,
 usage: {input_tokens, output_tokens}, tool_calls: [{tool, arguments, result_chars, duration_ms|null, error|null}],
-topic, model, trace_id}`
-Errors from upstream (OpenAI, Learn, schema violation, turn limit) → HTTP **502** with a readable `detail`.
+topic, model, trace_id, trace_url|null}`
+Errors from upstream (OpenAI, Learn, schema violation, turn limit) → HTTP **502**,
+`{"detail": {"error": "<readable reason>", "trace_id": "<32 hex>", "trace_url": "<link>"|null}}` (`ErrorResponse`,
+documented in Swagger on `/tools`, `/ask`, `/ask-hosted`).
+Every traced response, 502s included, carries the header `X-Trace-Id: <32 hex>`. Untraced URLs (`/healthz`,
+Swagger) carry none. `trace_url` fills the `TRACE_UI_URL` template and is `null` when that is unset.
 
 ### Span names and attributes
 
@@ -111,8 +123,8 @@ Resource: `service.name` (from `OTEL_SERVICE_NAME`, default `foundry-learn-agent
 ### `stats` snapshot (heartbeat line and `/healthz` body)
 
 ```json
-{"status":"ok","service":"foundry-learn-agent","version":"0.2.4","time":"<UTC ISO>","uptime_s":0,
- "exporter":"console|otlp[+azure-monitor]","model":"gpt-5.6-luna","rss_mb":25.6,
+{"status":"ok","service":"foundry-learn-agent","version":"0.3.0","time":"<UTC ISO>","uptime_s":0,
+ "exporter":"none|console|otlp[+azure-monitor]","model":"gpt-5.6-luna","rss_mb":25.6,
  "requests":{"/path":n},"errors":{"/path":n},"llm_turns":0,"tool_calls":0,
  "tokens":{"input_tokens":0,"output_tokens":0}}
 ```
@@ -127,12 +139,14 @@ Nothing in this path may perform I/O that would create a span.
 | `OPENAI_MODEL` | `gpt-5.6-luna` | `app.py` §3 `OPENAI_MODEL` |
 | `OTEL_SERVICE_NAME` | `foundry-learn-agent` | `SERVICE_NAME` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset → console | `configure_opentelemetry()` |
+| `OTEL_TRACES_EXPORTER` | unset | `configure_opentelemetry()`: `none` attaches no console/OTLP exporter (`exporter: "none"`); the tests use it |
+| `TRACE_UI_URL` | unset → `trace_url: null`; the Jaeger and Aspire overrides set it (`LAN_IP` or `localhost`) | `trace_url_for()`, read on every call |
 | `OTEL_PYTHON_FASTAPI_EXCLUDED_URLS` | `docs,openapi.json,redoc,healthz` | `EXCLUDED_URLS` |
 | `HEALTHZ_INTERVAL_SECONDS` | `60` | `HEALTHZ_INTERVAL_SECONDS` |
 | `LEARN_MCP_URL` | `https://learn.microsoft.com/api/mcp` | `LEARN_MCP_URL` (also used by `HOSTED_MCP_TOOL`) |
 | `OTEL_BSP_SCHEDULE_DELAY`, `OTEL_SEMCONV_STABILITY_OPT_IN` | SDK defaults | read by the SDK/instrumentation, not by app code |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | unset | Step 4 block only (commented) |
-| `LAN_IP` | unset → `127.0.0.1` only | Docker Compose port publishing in `compose*.yaml`, not app code |
+| `LAN_IP` | unset → `127.0.0.1` only | Docker Compose port publishing and the `TRACE_UI_URL` defaults in `compose*.yaml`, not app code |
 
 ## 5. Design decisions (and why)
 
@@ -149,10 +163,16 @@ Nothing in this path may perform I/O that would create a span.
    itself a lesson about `excluded_urls`. The heartbeat is plain `print` — a deliberate "control group".
 6. **Console exporter by default, OTLP by env var, Azure Monitor commented.** Zero infrastructure first; the
    provider fans out to every processor, so adding a backend never touches application code.
-7. **Floors, not pins, in `requirements.txt`.** Maintainer wants newest packages; pip enforces OTEL lockstep
-   because contrib packages pin `opentelemetry-semantic-conventions` exactly.
-8. **Compose override file for Jaeger** rather than profiles, so one command both starts Jaeger and points the
-   exporter at it (no half-configured state where the exporter targets a Jaeger that is not running).
+7. **Floors as intent, a committed lock as what installs.** `requirements.txt` keeps floors (the maintainer wants
+   the newest packages when they choose to upgrade); `requirements.lock.txt`, resolved inside the image's own base
+   by `scripts/lock.sh`, is what the Dockerfile installs, so every build is reproducible and upgrades are a
+   reviewable diff (`make lock-upgrade`). The lesson behind it is 0.2.2: `openai>=1.80` let 3.x in overnight, and
+   its move to httpx2 silently removed every OpenAI span. pip still enforces OTEL lockstep (contrib packages pin
+   `opentelemetry-semantic-conventions` exactly) and the Dockerfile's `pip check` fails an inconsistent set.
+8. **Compose override files for the trace UI** rather than profiles, so one command both starts the viewer and
+   points the exporter at it, with no half-configured state where the exporter targets a viewer that isn't running.
+   Jaeger (`compose.jaeger.yaml`) is the default. The Aspire Dashboard (`compose.aspire.yaml`) is the alternative,
+   for when metrics and logs join the traces.
 9. **`MAX_TURNS = 8`** bounds cost if the model loops.
 10. **Ports are published on IPv4 `127.0.0.1`, plus `LAN_IP` when set — never on `0.0.0.0` or IPv6.** `/ask` and
     `/ask-hosted` spend OpenAI tokens, the Jaeger UI shows every span attribute (tool arguments included) and
@@ -160,6 +180,16 @@ Nothing in this path may perform I/O that would create a span.
     address also stops Docker from publishing on `[::]`, and Compose merges the two identical mappings when
     `LAN_IP` is unset. Inside the container uvicorn still listens on `0.0.0.0`: that is the container's own
     network namespace, which Docker needs in order to publish the port.
+11. **Trace ids everywhere, and a link into the trace UI.** Every traced response carries its trace id in the body
+    and in the `X-Trace-Id` header; 502 bodies carry it too, because a failed request is exactly when you want its
+    trace. `trace_url` turns the id into a link, so the step from Swagger to the trace is one click. The
+    `count_requests` middleware stamps the header; it is registered *before* `instrument_app`, and the FastAPI
+    instrumentation keeps its own middleware outermost anyway, so the SERVER span is current inside it.
+12. **The trace shape is under test.** The trace is the deliverable, so `tests/` asserts it: span names,
+    nesting, kinds, attributes, `traceparent` injection. The fakes sit *below* the real instrumentation (an httpx
+    `MockTransport` for Learn, instrumented with `instrument_client` because `instrument()` patches the real
+    transport class), so real CLIENT spans are produced; OpenAI is a scripted fake, so no key, network or tokens
+    are needed. CI runs the tests plus a container smoke test on every push.
 
 ## 6. VERIFICATION CHECKLIST — assumptions made without internet access
 
@@ -198,6 +228,7 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 | T5 | `OTEL_BSP_SCHEDULE_DELAY` (ms) and `OTEL_SEMCONV_STABILITY_OPT_IN=http` are honoured. | `.env.example`, README | OTEL Python SDK env var docs | Fix names in `.env.example` and README. |
 | T6 | Semantic-convention attribute names on auto spans are either `http.method/http.url/http.status_code` or `http.request.method/url.full/http.response.status_code`. | README "Reading the console output" | Run `/ping` once | Update README wording. |
 | T7 | `trace.get_tracer_provider().shutdown()` flushes `BatchSpanProcessor`. | `lifespan` | SDK docs | Use `provider.force_flush()` then `shutdown()`. |
+| T8 | `HTTPXClientInstrumentor().instrument()` patches the real transport class (`httpx.AsyncHTTPTransport.handle_async_request`), not `httpx.MockTransport`; `HTTPXClientInstrumentor.instrument_client(client)` wraps any client's transport with the same wrapper. **Verified 2026-09-29** (instrumentation 0.66b0): the test fixture instruments its MockTransport client this way, and the tests see real CLIENT spans and injected `traceparent`. | `tests/conftest.py` `client` | `pytest -q` (the `/tools` and `/ask` tests) | If CLIENT spans disappear after an upgrade, check how `instrument()` / `instrument_client()` patch in the new release. |
 
 ### 6.4 Step 4 — Azure Monitor (commented code; verify so it works when uncommented)
 
@@ -217,47 +248,55 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 | C3 | `jaegertracing/jaeger:latest` (Jaeger v2) runs all-in-one by default with OTLP receivers on 4317/4318 and UI on 16686. | `compose.jaeger.yaml`, README | Jaeger docs | Pin a version tag; if v1 semantics are needed use `jaegertracing/all-in-one` with `COLLECTOR_OTLP_ENABLED=true`. |
 | C4 | `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` is harmless with the HTTP exporter. | `compose.jaeger.yaml` | SDK docs | Remove if it causes a warning. |
 | C5 | `python -c "urllib.request.urlopen(...)"` works as HEALTHCHECK in slim (no curl). | `Dockerfile`, `compose.yaml` | `docker inspect --format '{{json .State.Health}}'` | Adjust. |
+| C6 | `mcr.microsoft.com/dotnet/aspire-dashboard:latest` serves its UI on 18888 and OTLP/gRPC and OTLP/HTTP on 18889 and 18890 by default; `ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true` disables the login token; a trace opens at `/traces/detail/{trace_id}`. **Verified 2026-09-29** against aspire.dev/dashboard/standalone and a live run: spans arrive over OTLP/HTTP, and a `trace_url` opens "Aspire trace (foundry-learn-agent: GET /tools)" with all its spans. | `compose.aspire.yaml` | Aspire dashboard docs; one live run | Fix the env var names or ports; pin the image tag if `latest` changes behaviour. |
+| C7 | Compose resolves nested defaults such as `${TRACE_UI_URL:-http://${LAN_IP:-localhost}:16686/trace/{trace_id}}`, and leaves `{trace_id}` (no `$`) alone. **Verified 2026-09-29** with Compose 2.40.3: unset → `localhost`, `LAN_IP` → that address, `TRACE_UI_URL` → itself. | `compose.jaeger.yaml`, `compose.aspire.yaml` | `docker compose … config` | Set `TRACE_UI_URL` explicitly in `.env`. |
 
 ### 6.6 FastAPI / Pydantic
 
 | # | Assumed | Where | Verify | If wrong |
 |---|---|---|---|---|
-| F1 | `@app.middleware("http")` (BaseHTTPMiddleware) coexists with `FastAPIInstrumentor.instrument_app`; `request.url.path` is available; exceptions propagate through `call_next`. | `count_requests` | run `/ping`, `/healthz` | If ordering issues arise, register the middleware before `instrument_app`. |
+| F1 | `@app.middleware("http")` (BaseHTTPMiddleware) coexists with `FastAPIInstrumentor.instrument_app`; `request.url.path` is available; exceptions propagate through `call_next`; the SERVER span is current inside the middleware. **Verified 2026-09-29:** with the middleware registered before `instrument_app`, `X-Trace-Id` equals the SERVER span's trace id on 200s and 502s (tests), and live. | `count_requests` | `pytest -q`; run `/ping`, `/healthz` | If the header goes missing or all zeros, report the installed `opentelemetry-instrumentation-fastapi` version. |
 | F2 | Pydantic v2 API: `ConfigDict(extra="forbid")`, `model_json_schema()`, `model_validate_json()`, `model_dump()`; nested `Link` lands in `$defs` with `additionalProperties:false` and all fields `required` (OpenAI strict rules). | `Brief`, `Link`, `BRIEF_TEXT_FORMAT` | print `Brief.model_json_schema()` | If strict mode rejects the schema, post-process: ensure every object has `additionalProperties:false` and `required` = all property names. |
 | F3 | Lifespan context manager pattern (`FastAPI(lifespan=...)`) and `RedirectResponse` import path. | `lifespan`, `root()` | FastAPI docs | Adjust. |
 
 ## 7. Acceptance tests (run in this order; report raw output)
 
-Prereqs: Docker on Linux, `.env` with a valid `OPENAI_API_KEY`.
+Prereqs: Docker on Linux, `.env` with a valid `OPENAI_API_KEY`. Run the offline checks first; they need neither.
 
 ```bash
+# -1. Offline: lint + trace-shape tests (no network, no key, no tokens)
+make venv && make check
+#    EXPECT: pylint 10.00/10 for app.py and tests; "10 passed"
+
 # 0. Build + start (console mode)
 cp .env.example .env && $EDITOR .env
 docker compose up --build -d && sleep 5 && docker compose logs api | head -40
-#    EXPECT: a "[healthz] {...}" line within the first lines; no tracebacks; uvicorn "Application startup complete".
+#    EXPECT: ">> installing the pinned set from requirements.lock.txt" in the build; a "[healthz] {...}" line within
+#            the first lines; no tracebacks; uvicorn "Application startup complete".
 
 # 1. Untraced probe
-curl -s localhost:8000/healthz | python -m json.tool
+curl -si localhost:8000/healthz | grep -ci x-trace-id; curl -s localhost:8000/healthz | python3 -m json.tool
 docker compose logs api | grep -c '"name": "GET /healthz"'
-#    EXPECT: JSON snapshot; grep count 0 (no span for /healthz)
+#    EXPECT: 0 headers; JSON snapshot; grep count 0 (no span for /healthz)
 
 # 2. Traced probe
-curl -s localhost:8000/ping; sleep 6; docker compose logs api | grep -A3 '"name": "GET /ping"' | head
-#    EXPECT: {"pong":true,"trace_id":"<32 hex>"}; a SERVER span JSON whose context.trace_id == trace_id
+curl -si localhost:8000/ping; sleep 6; docker compose logs api | grep -A3 '"name": "GET /ping"' | head
+#    EXPECT: X-Trace-Id header == body trace_id (32 hex); "trace_url": null in console mode; a SERVER span JSON whose
+#            context.trace_id == trace_id
 
 # 3. Learn only (no tokens)
-curl -s localhost:8000/tools | python -m json.tool | head -30; sleep 6
+curl -s localhost:8000/tools | python3 -m json.tool | head -30; sleep 6
 docker compose logs api | grep -o '"name": "mcp [^"]*"' | sort | uniq -c
 #    EXPECT: tools microsoft_docs_search, microsoft_code_sample_search, microsoft_docs_fetch; spans mcp initialize, mcp notifications/initialized, mcp tools/list
 
 # 4. Local-tools agent
 curl -s -X POST localhost:8000/ask -H 'Content-Type: application/json' \
-     -d '{"topic":"Microsoft Foundry","paragraphs":2,"links":3}' | python -m json.tool
+     -d '{"topic":"Microsoft Foundry","paragraphs":2,"links":3}' | python3 -m json.tool
 #    EXPECT: mode local-tools, 2 paragraphs, 3 learn.microsoft.com links, turns >= 2, tool_calls >= 1 with duration_ms numbers
 
 # 5. Hosted-MCP agent
 curl -s -X POST localhost:8000/ask-hosted -H 'Content-Type: application/json' \
-     -d '{"topic":"Microsoft Foundry","paragraphs":2,"links":3}' | python -m json.tool
+     -d '{"topic":"Microsoft Foundry","paragraphs":2,"links":3}' | python3 -m json.tool
 #    EXPECT: mode hosted-mcp, turns == 1, tool_calls with duration_ms null
 
 # 6. Heartbeat + memory cap
@@ -267,13 +306,22 @@ docker stats --no-stream foundry-learn-agent
 
 # 7. Jaeger mode
 docker compose down && docker compose -f compose.yaml -f compose.jaeger.yaml up --build -d
-#    repeat steps 4 and 5, then open http://localhost:16686 -> service foundry-learn-agent -> compare the two traces
-#    EXPECT: /ask trace has many child spans (mcp ..., llm.turn, POST); /ask-hosted trace has agent.run -> llm.turn -> one POST
+#    repeat steps 4 and 5, then click each response's trace_url (or open http://localhost:16686 -> service
+#    foundry-learn-agent) and compare the two traces
+#    EXPECT: trace_url opens that trace; /ask trace has many child spans (mcp ..., llm.turn, POST) and every mcp ... and
+#            llm.turn span has one POST child; /ask-hosted trace has agent.run -> llm.turn -> one POST
 
 # 8. Who can connect (Jaeger mode still running)
 ss -ltn | grep -E ':(8000|16686|4318) '
 #    EXPECT: 127.0.0.1 for all three, plus the LAN_IP address for 8000 and 16686 when .env sets it;
 #            never 0.0.0.0, [::] or any other address
+
+# 9. Aspire mode (optional), then back to Jaeger
+docker compose -f compose.yaml -f compose.aspire.yaml up -d --remove-orphans; curl -s localhost:8000/tools >/dev/null
+curl -s localhost:8000/ping | python3 -m json.tool      # open its trace_url
+docker compose -f compose.yaml -f compose.jaeger.yaml up -d --remove-orphans
+#    EXPECT: trace_url -> http://<LAN_IP or localhost>:18888/traces/detail/<trace_id> showing the trace; 18888 on
+#            127.0.0.1 (+ LAN_IP), 18890 on 127.0.0.1 only
 ```
 
 ## 8. What was verified offline (already done — do not repeat)
@@ -285,12 +333,14 @@ ss -ltn | grep -E ':(8000|16686|4318) '
   path (`TOOL ERROR` fed back to the model, exception recorded on `agent.run`), span naming order, `stats`
   accumulation, `to_http_error` mapping, route registration.
 - Not verified: anything involving a real network call, real package versions, real container runtime.
+- Since 0.3.0 the `tests/` suite automates most of the stub checks above against the real libraries (the fakes sit
+  below the real FastAPI and httpx instrumentation), and CI runs it on every push.
 
 ## 9. Extension points (after verification)
 
 1. **Metrics** — add a `MeterProvider` in `configure_opentelemetry()`; FastAPI instrumentation then emits
    request duration / active requests with no further code. Consider exporting the `stats` counters as OTEL
-   metrics to show the "print vs telemetry" convergence.
+   metrics to show the "print vs telemetry" convergence. `compose.aspire.yaml` shows metrics next to the traces.
 2. **Logs** — inject `trace_id`/`span_id` into `logging` records (`opentelemetry-instrumentation-logging`) and
    replace `print_health()` with a logger while keeping stdout as the sink.
 3. **Distributed tracing demo** — a second tiny FastAPI service that the agent calls; the injected `traceparent`

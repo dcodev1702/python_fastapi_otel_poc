@@ -7,10 +7,68 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-29
+
+Trace ids on every response and failure, a committed dependency lock, trace-shape tests with CI, and the Aspire
+Dashboard as a second trace UI. These changes came from a repository review by Fable 5.1, and were then
+integrated, corrected where running them showed a problem, and verified live. The minor version bump is because
+the 502 body changes shape.
+
+### Added
+
+- Every traced response carries its trace id in an `X-Trace-Id` header as well as in the body. With a trace UI
+  running, it also carries a `trace_url` that opens that exact trace. The template is `TRACE_UI_URL`; the Jaeger
+  and Aspire overrides set it, using `LAN_IP` when set and `localhost` otherwise. `/healthz` gets neither: it has
+  no span.
+- 502 bodies carry `detail.trace_id` and `detail.trace_url`, so a failed request is as easy to find as a good one.
+  The 502 shape (`ErrorResponse`) is documented in Swagger on `/tools`, `/ask` and `/ask-hosted`.
+- `requirements.lock.txt`, the exact set the image installs. `scripts/lock.sh` (`make lock`, `make lock-upgrade`)
+  resolves it from `requirements.txt` inside the Dockerfile's base image. It keeps the lock only if
+  `HTTPX2ClientInstrumentor` imports and openai is 3 or later. The first lock pins exactly what the 0.2.4 image
+  had installed.
+- Trace-shape tests (`tests/`, `pytest.ini`, `requirements-dev.txt`): 10 tests that assert which spans each
+  endpoint produces, how they nest and what they carry. They run against a fake Microsoft Learn MCP server under
+  the real httpx instrumentation and a scripted fake OpenAI client, so they need no network, key or tokens.
+- GitHub Actions CI (`.github/workflows/ci.yml`), on every push to `main` and every pull request:
+  - pylint and the tests on Python 3.14.7;
+  - compose validation for all three stacks;
+  - an image build, and a container smoke test proving that `/ping` is traced and `/healthz` is not.
+- `compose.aspire.yaml`, an alternative to `compose.jaeger.yaml`: the same spans in the .NET Aspire Dashboard,
+  which shows traces, metrics and structured logs side by side. Its UI (18888) follows the IPv4-only rules;
+  OTLP (18890) stays on `127.0.0.1`.
+- `Makefile` shortcuts: `venv` (uv, the image's Python), `check`, `test`, `lint`, `lock`, `lock-upgrade`, `up`,
+  `up-jaeger`, `up-aspire`, `down`, `logs`.
+- The README gains "Run the tests" and "Dependencies: floors and a lock" sections. `design.md` gains decisions 11
+  and 12, checklist items T8, C6 and C7, and acceptance steps for `make check` and Aspire mode.
+
 ### Changed
 
+- **The 502 `detail` is an object** (`error`, `trace_id`, `trace_url`) instead of a string. If you scripted
+  against it, read `detail.error`.
+- The Dockerfile installs `requirements.lock.txt`, falling back to the floors with a warning, then runs `pip check`.
+- `requirements.txt` sets `openai>=3`, matching the httpx2 transport the code and docs describe.
+- `configure_opentelemetry()` honours the standard `OTEL_TRACES_EXPORTER=none`: no exporter attached, and
+  `exporter: "none"` in the status snapshot. The tests use it.
+- The `count_requests` middleware sits before `instrument_app`, so it runs inside the SERVER span and can stamp
+  `X-Trace-Id`.
+- `.pylintrc` adds `source-roots=tests,.`, so Pylint resolves the tests' imports; `app.py` and `tests/` both
+  rate 10.00/10. `.vscode/settings.json` turns on the Testing view, and `.dockerignore` keeps the new
+  development-only files out of the build context.
 - Local runs are documented for Python 3.14.7 or newer, the version the container and the `.venv` use: the
   README's "Runs on" row and Prerequisites, and the `app.py` header.
+
+### Fixed (in the reviewed proposal, before release)
+
+- The test fixture's fake Learn client produced no CLIENT spans. `HTTPXClientInstrumentor().instrument()` patches
+  the real transport class, not `httpx.MockTransport`, so the fixture now uses `instrument_client()` (2 of 10
+  tests failed before this).
+- `compose.aspire.yaml` used the older `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS`. It now uses the documented
+  `ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS`, and relies on the image's documented OTLP/HTTP port.
+- `trace_url` said `localhost`, which opens nothing from another machine on the LAN; it now follows `LAN_IP`.
+- `scripts/lock.sh --local`, the Makefile and the `make venv` target called `python`, which Ubuntu doesn't ship.
+  They now use `python3`, uv and `.venv`.
+- CI used `actions/checkout@v4` and `actions/setup-python@v5`; it now uses v7 of both, pins Python 3.14.7 like
+  the image, caches pip, and lints the tests too.
 
 ## [0.2.4] - 2026-09-28
 
@@ -125,7 +183,8 @@ Initial version, written offline; `design.md` §6 lists the external contracts t
   - the `compose.jaeger.yaml` override that adds Jaeger.
 - `README.md`, a walkthrough, and `design.md`, the design notes and verification checklist.
 
-[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.1...v0.2.2

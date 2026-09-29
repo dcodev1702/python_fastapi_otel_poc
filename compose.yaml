@@ -23,7 +23,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: foundry-learn-agent:0.2.4
+    image: foundry-learn-agent:0.3.0
     container_name: foundry-learn-agent
     ports:                                      # IPv4 only - never 0.0.0.0 or IPv6: /ask spends your OpenAI tokens
       - "127.0.0.1:8000:8000"                   # this host

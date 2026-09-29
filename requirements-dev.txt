@@ -1,0 +1,9 @@
+# Foundry Learn Agent - development-only dependencies (tests, lint). Not installed in the image.
+# Author : dcodev1702 & M365 Copilot / Cowork   Created: 2026-09-29
+#
+#   pip install -r requirements.lock.txt -r requirements-dev.txt      (or: make venv)
+#
+# The tests need nothing beyond pytest: fastapi.testclient rides on httpx (already a runtime dependency) and the
+# in-memory span exporter ships with opentelemetry-sdk.
+pytest>=8
+pylint>=4                                           # .pylintrc sets the 120-column width the code is written to

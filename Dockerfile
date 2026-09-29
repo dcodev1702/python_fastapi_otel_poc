@@ -5,8 +5,8 @@
 # Created: 2026-09-28
 #
 # Build & run through compose (see compose.yaml); direct use for reference:
-#   docker build -t foundry-learn-agent:0.2.4 .
-#   docker run --rm -p 127.0.0.1:8000:8000 --env-file .env --memory 3g foundry-learn-agent:0.2.4
+#   docker build -t foundry-learn-agent:0.3.0 .
+#   docker run --rm -p 127.0.0.1:8000:8000 --env-file .env --memory 3g foundry-learn-agent:0.3.0
 # =============================================================================
 FROM python:3.14.7-slim
 
@@ -22,11 +22,24 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Dependencies first so this layer is cached until requirements.txt changes.
-# pip is upgraded before use; requirements.txt uses floors, so each build picks up the newest compatible releases.
-COPY requirements.txt .
+# Dependencies first so this layer is cached until the requirements change.
+#
+# requirements.lock.txt is the resolved, pinned set that scripts/lock.sh produced from requirements.txt inside
+# this very base image - installing it makes every build reproducible. The trailing `*` makes the lock file
+# optional to COPY, so a clone without one still builds - from the floors, with a loud warning, because that build
+# picks up whatever is newest on PyPI today (the httpx2 surprise in CHANGELOG 0.2.2 is what that looks like).
+# `pip check` fails the build if the installed set is inconsistent (e.g. an OpenTelemetry package out of lockstep).
+COPY requirements.txt requirements.lock.txt* ./
 RUN python -m pip install --upgrade pip setuptools wheel \
- && python -m pip install -r requirements.txt \
+ && if [ -f requirements.lock.txt ]; then \
+        echo ">> installing the pinned set from requirements.lock.txt" \
+        && python -m pip install -r requirements.lock.txt; \
+    else \
+        echo ">> WARNING: requirements.lock.txt not found - installing floors from requirements.txt." \
+        && echo ">>          Run scripts/lock.sh and commit the lock for reproducible builds." \
+        && python -m pip install -r requirements.txt; \
+    fi \
+ && python -m pip check \
  && python -m pip list --format=columns
 
 # Application code (everything else is kept out by .dockerignore - notably .env)

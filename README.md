@@ -4,7 +4,7 @@
 |---|---|
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
-| **Version** | 0.2.4 |
+| **Version** | 0.3.0 |
 | **Runs on** | Python 3.14.7+ locally, or Docker Compose on Linux (container capped at 3 GB RAM) |
 
 A small, runnable service for learning how OpenTelemetry (OTEL) tracing works in a Python API that drives an
@@ -44,18 +44,25 @@ Where each piece runs and what talks to what; the numbered flows are explained i
 | File | Purpose |
 |---|---|
 | `app.py` | The whole program in five numbered sections: OTEL setup (with **Step 4 / Azure Monitor built in, commented out**), Microsoft Learn MCP client, the agent (prompts + local loop + hosted variant), health + `stats` heartbeat, the API |
-| `requirements.txt` | Dependencies as *floors* — pip installs the newest compatible releases; the OTEL family stays in lockstep automatically |
-| `Dockerfile` | `python:3.14.7-slim`, non-root, pip upgraded before installing, health check on `/healthz` |
+| `requirements.txt` | Dependencies as *floors*: the intent you edit. The OTEL family stays in lockstep automatically |
+| `requirements.lock.txt` | The exact, pinned set the image installs, made from `requirements.txt` by `scripts/lock.sh` (see *Dependencies*) |
+| `scripts/lock.sh` | Resolves the lock inside the Dockerfile's base image and checks it before keeping it |
+| `requirements-dev.txt` | Test and lint tools (`pytest`, `pylint`); never installed in the image |
+| `tests/`, `pytest.ini` | Trace-shape tests against a fake Microsoft Learn server and a fake OpenAI client: no network, no key, no tokens |
+| `Makefile` | Shortcuts: `make venv`, `make check`, `make lock`, `make up-jaeger`, `make up-aspire`; `make` lists them all |
+| `.github/workflows/ci.yml` | GitHub Actions: pylint and the tests, then an image build and a container smoke test, on every push and pull request |
+| `Dockerfile` | `python:3.14.7-slim`, non-root, installs the lock and runs `pip check`, health check on `/healthz` |
 | `compose.yaml` | Console mode; the container is hard-capped at **3 GB** RAM |
 | `compose.jaeger.yaml` | Override that adds a Jaeger UI and ships spans to it |
+| `compose.aspire.yaml` | Alternative override: the .NET Aspire Dashboard instead of Jaeger |
 | `.env.example` | Copy to `.env`; holds `OPENAI_API_KEY` and optional knobs |
 | `design.md` | Design notes plus a verification checklist for an AI assistant with internet access (this project was written offline) |
 | `CHANGELOG.md` | Notable changes, version by version |
 | `LICENSE` | MIT License |
 | `images/foundry-learn-agent-architecture-dark.svg` | The architecture diagram above (also in `design.md` §2) |
 | `.dockerignore`, `.gitignore` | Keep `.env` out of the image and the repo |
-| `.vscode/settings.json` | Points Pylint and the Python extension at `.venv` (see *Run it locally instead*) |
-| `.pylintrc` | Pylint settings: 120-column lines, the width the code is written to |
+| `.vscode/settings.json` | Points Pylint and the Python extension at `.venv`, and turns on the **Testing** view (see *Run it locally instead*) |
+| `.pylintrc` | Pylint settings: 120-column lines, the width the code is written to, and the import roots the tests need |
 
 ## Prerequisites
 
@@ -68,7 +75,7 @@ Where each piece runs and what talks to what; the numbered flows are explained i
 
 ```bash
 cp .env.example .env            # put your OPENAI_API_KEY in .env
-docker compose up --build       # builds the image (pip is upgraded first), starts the API on :8000
+docker compose up --build       # builds the image from requirements.lock.txt, starts the API on :8000
 ```
 
 Open <http://localhost:8000/docs>. In a second terminal, watch the spans and the heartbeat:
@@ -96,10 +103,10 @@ counted; uncomment `memswap_limit` in `compose.yaml` if you want memory + swap c
 **Who can connect.** Docker publishes the ports on IPv4 `127.0.0.1` only (never on `0.0.0.0`, never on IPv6), so
 by default only this host can call the API, and `/ask` spends your OpenAI tokens. To use it from the other machines
 on your LAN, set `LAN_IP` in `.env` to this host's IPv4 LAN address (`hostname -I` lists it) and run
-`docker compose up -d` again. The API (8000) and the Jaeger UI (16686) are then published on that address too;
-OTLP (4318) stays local. Keep `LAN_IP` a private address and don't forward these ports on your router. Without
-`LAN_IP`, reach the API from another machine through an SSH tunnel (the VS Code **Ports** view, or
-`ssh -L 8000:localhost:8000 -L 16686:localhost:16686 <host>`).
+`docker compose up -d` again. The API (8000) and the trace UI (Jaeger on 16686, or Aspire on 18888) are then
+published on that address too, and the `trace_url` links point at it. OTLP (4318, 18890) stays local. Keep `LAN_IP`
+a private address and don't forward these ports on your router. Without `LAN_IP`, reach the API from another
+machine through an SSH tunnel (the VS Code **Ports** view, or `ssh -L 8000:localhost:8000 -L 16686:localhost:16686 <host>`).
 
 ### With a Jaeger UI (recommended once the console makes sense)
 
@@ -108,20 +115,37 @@ docker compose -f compose.yaml -f compose.jaeger.yaml up --build
 ```
 
 Open <http://localhost:16686>, choose the service `foundry-learn-agent`, and either browse traces or paste a
-`trace_id` from an API response into the search box. The waterfall makes parent/child nesting and where the
-time goes (LLM turns dominate) obvious in a way the console never will. The override file does two things:
-adds the Jaeger container (own 2 GB cap) and sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` on the API —
-`app.py` is untouched.
+`trace_id` from an API response into the search box. Quicker still: every traced response carries a `trace_url`
+that opens that exact trace. The waterfall makes parent/child nesting and where the time goes (LLM turns dominate)
+obvious in a way the console never will. The override file does three things, and `app.py` is untouched:
+- adds the Jaeger container, with its own 2 GB cap;
+- sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` on the API;
+- sets `TRACE_UI_URL`, the template for those links. It uses `LAN_IP` when that's set, otherwise `localhost`.
+
+### With the Aspire Dashboard instead
+
+```bash
+docker compose -f compose.yaml -f compose.aspire.yaml up --build --remove-orphans
+```
+
+The same spans in a different UI: the standalone .NET Aspire Dashboard at <http://localhost:18888>. It is an OTLP
+receiver for any language and shows traces, metrics and structured logs side by side. That becomes useful once you
+add a `MeterProvider` or log export. Use it *instead of* Jaeger, not with it: `--remove-orphans` removes the other
+viewer's container, and its in-memory traces go with it. The dashboard runs without a login token, which is fine
+for local learning; its ports follow the same IPv4-only rules as Jaeger's. `trace_url` links open its
+trace-detail page.
 
 ## Run it locally instead (venv)
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+make venv                       # .venv with the image's Python (via uv), the pinned packages and the test tools
+source .venv/bin/activate
 export OPENAI_API_KEY=sk-...
 uvicorn app:app --reload
 ```
+
+Without `make` or `uv`, the equivalent is `python3 -m venv .venv` followed by
+`.venv/bin/pip install -r requirements.lock.txt -r requirements-dev.txt`.
 
 Open <http://127.0.0.1:8000/docs>. uvicorn listens on `127.0.0.1` only unless you pass `--host`; to allow your LAN,
 pass this machine's LAN address, never `--host 0.0.0.0`. To use Jaeger from a local run, start only Jaeger from the override file
@@ -131,6 +155,45 @@ before starting uvicorn.
 **Editing in VS Code?** Create the `.venv` above even if you only run the app in Docker: `.vscode/settings.json`
 points Pylint and the Python extension at `.venv/bin/python`. Without it they check `app.py` against a Python that
 lacks these packages and flag every third-party import as unresolved.
+
+## Run the tests
+
+```bash
+make check                      # pylint app.py tests (10.00/10), then pytest: 10 trace-shape tests in about a second
+```
+
+The trace is this project's deliverable, so the tests assert the trace itself: which spans each endpoint produces,
+how they nest and what they carry. They also check the promises around it:
+- every traced response carries its `trace_id` in the body and the `X-Trace-Id` header;
+- 502 bodies carry the trace id too;
+- `/healthz` creates no span at all.
+
+They need no network, no API key and no tokens:
+- A fake Microsoft Learn MCP server sits under the app's real httpx client, so the real instrumentation makes real
+  CLIENT spans and injects `traceparent`.
+- A scripted fake OpenAI client drives both agent loops.
+- An in-memory exporter collects the spans.
+
+VS Code's **Testing** view runs the same tests. On every push and pull request, the GitHub Actions workflow in
+`.github/workflows/ci.yml` runs pylint and the tests, then builds the image and proves in a real container that
+`/ping` is traced and `/healthz` is not.
+
+## Dependencies: floors and a lock
+
+`requirements.txt` holds *floors*: the oldest release of each package known to work. That's the intent, and it's
+the file you edit. The image installs `requirements.lock.txt` instead: the exact versions `scripts/lock.sh`
+resolved from those floors inside the Dockerfile's own base image. So a rebuild installs the same packages
+tomorrow as today, and newer releases arrive only when you ask for them:
+
+| Command | When |
+|---|---|
+| `make lock-upgrade` | you want the newest releases the floors allow. Review `git diff requirements.lock.txt`, run `make check`, rebuild |
+| `make lock` | after editing `requirements.txt`; versions stay put where the floors still allow them |
+
+Before keeping a new lock, the script installs it in a throwaway environment and checks the facts the traces depend
+on. For example, `HTTPX2ClientInstrumentor` must still exist, because openai 3.x moved to httpx2, and without that
+instrumentor every OpenAI span silently disappeared (CHANGELOG 0.2.2). The Dockerfile then runs `pip check`, so a
+set that isn't in lockstep fails the build.
 
 ## Configuration
 
@@ -147,19 +210,24 @@ All optional; set in `.env` (Docker) or export in your shell (local).
 | `OTEL_BSP_SCHEDULE_DELAY` | `5000` | ms between span flushes; `1000` makes the console feel snappier |
 | `OTEL_SEMCONV_STABILITY_OPT_IN` | unset | `http` switches auto spans to the newer attribute names |
 | `LEARN_MCP_URL` | `https://learn.microsoft.com/api/mcp` | another MCP server to experiment with (must be public for `/ask-hosted`) |
-| `LAN_IP` | unset → `127.0.0.1` only | Docker Compose only: also publish the API and the Jaeger UI on this IPv4 LAN address |
+| `LAN_IP` | unset → `127.0.0.1` only | Docker Compose only: also publish the API and the trace UI on this IPv4 LAN address, and use it in `trace_url` links |
+| `TRACE_UI_URL` | set by the Jaeger and Aspire overrides | the template for `trace_url`; the app replaces `{trace_id}`. Unset (console mode) means no link |
+| `OTEL_TRACES_EXPORTER` | unset | `none` attaches no console or OTLP exporter; the tests use it and collect spans in memory instead |
 
 ## Try it — in this order
 
-Each response from a traced endpoint contains its `trace_id`; the same value appears as `context.trace_id` on
-every span of that request.
+Each response from a traced endpoint carries its `trace_id` in the body and in the `X-Trace-Id` header; the same
+value appears as `context.trace_id` on every span of that request. With Jaeger or Aspire running, the body also has
+a `trace_url` that opens that exact trace.
 
 **1. `GET /healthz` — the control group.** Returns the status snapshot and creates **no span**: it is in the
 excluded-URL list, because liveness probes run forever and would drown a trace backend. Docker's HEALTHCHECK
-hits it every 60 s; watch `requests["/healthz"]` climb in the heartbeat while nothing OTEL-shaped appears.
+hits it every 60 s; watch `requests["/healthz"]` climb in the heartbeat while nothing OTEL-shaped appears. It has
+no `X-Trace-Id` header either: there is no span to report.
 
 **2. `GET /ping` — the cheapest span.** One request, one trace: the SERVER span `GET /ping` plus two small ASGI
-children (`http receive`, `http send`). Compare its `trace_id` with the span JSON in the log.
+children (`http receive`, `http send`). `curl -si localhost:8000/ping` shows the id twice, in the `X-Trace-Id`
+header and the body; compare it with the span JSON in the log, or click the `trace_url`.
 
 **3. `GET /tools` — outbound tracing for free.** Talks to Microsoft Learn only: **no OpenAI call, no tokens**.
 It returns the server's three tools with their JSON schemas: `microsoft_docs_search` (`query`),
@@ -172,11 +240,14 @@ automatic `POST` CLIENT child pointing at `learn.microsoft.com`. Hammer this one
 ```bash
 curl -s -X POST http://localhost:8000/ask \
   -H "Content-Type: application/json" \
-  -d '{"topic": "Microsoft Foundry", "paragraphs": 2, "links": 3}' | python -m json.tool
+  -d '{"topic": "Microsoft Foundry", "paragraphs": 2, "links": 3}' | python3 -m json.tool
 ```
 
 The response has `mode: "local-tools"`, the brief (`paragraphs`, `links`), how many LLM `turns` it took, token
-`usage`, every `tool_calls` entry with its measured `duration_ms`, and the `trace_id`. Expect 10–40 seconds.
+`usage`, every `tool_calls` entry with its measured `duration_ms`, the `trace_id` and, with a trace UI running, the
+`trace_url`. Expect 10–40 seconds. If an upstream call fails you get a 502 instead. Its body carries the same
+`trace_id` and `trace_url` under `detail`, so a failed request is as easy to find as a good one:
+`{"detail": {"error": "...", "trace_id": "...", "trace_url": "..."}}`.
 
 **5. `POST /ask-hosted` — same question, OpenAI runs the tools.** Same body, same answer shape, but
 `mode: "hosted-mcp"`, `turns: 1`, and every `tool_calls[].duration_ms` is `null` — you did not make those
@@ -185,7 +256,7 @@ calls, OpenAI did. In Jaeger the trace collapses to `agent.run → llm.turn → 
 **6. Watch the heartbeat.** Every 60 s the log shows one line like
 
 ```
-[healthz] {"status": "ok", "service": "foundry-learn-agent", "version": "0.2.4", "time": "...", "uptime_s": 420,
+[healthz] {"status": "ok", "service": "foundry-learn-agent", "version": "0.3.0", "time": "...", "uptime_s": 420,
            "exporter": "console", "model": "gpt-5.6-luna", "rss_mb": 96.4,
            "requests": {"/healthz": 7, "/ping": 1, "/tools": 2, "/ask": 1, "/ask-hosted": 1}, "errors": {},
            "llm_turns": 4, "tool_calls": 5, "tokens": {"input_tokens": 18342, "output_tokens": 1210}}
@@ -279,8 +350,8 @@ Both live at the top of section 3 in `app.py`.
 6. **Count the hops.** Ask about something broader (for example "Microsoft Sentinel data lake") and match the
    `mcp tools/call` spans against `tool_calls` in the response.
 7. **Break it on purpose.** Set `LEARN_MCP_URL=https://learn.microsoft.com/api/does-not-exist` and call `/tools`.
-   Look at `status` and the `exception` event on the failing span, the `502` the API returns, and
-   `errors["/tools"]` in the next heartbeat.
+   The `502` carries `detail.trace_url`: open it and look at `status` and the `exception` event on the failing
+   span, then at `errors["/tools"]` in the next heartbeat.
 8. **Local vs hosted, side by side.** With Jaeger running, call `/ask` and `/ask-hosted` with the same body and
    open both traces. Count spans, compare total duration, and note that the hosted response *still tells you*
    which tools ran — just not how long each took.
@@ -294,7 +365,7 @@ Both live at the top of section 3 in `app.py`.
 
 - **Metrics.** Configure a `MeterProvider` the same way as the `TracerProvider`; the FastAPI instrumentation
   then emits request-duration and active-request metrics with no further code — and the `stats` counters could
-  become real OTEL counters.
+  become real OTEL counters. The Aspire override shows them next to the traces.
 - **Logs.** Correlate Python `logging` output with trace ids so a log line links to its trace.
 - **Distributed tracing.** The `traceparent` header is already injected into every outbound call. Learn and
   OpenAI ignore it, but a second service of yours running OTEL would continue the trace under the same `trace_id`.
@@ -311,11 +382,15 @@ Both live at the top of section 3 in `app.py`.
 | `502 OpenAI error … model` | set `OPENAI_MODEL` to a model your account can use |
 | `502 Microsoft Learn MCP transport error` | no route/proxy to `learn.microsoft.com` from the container; try `docker compose exec api python -c "import urllib.request;print(urllib.request.urlopen('https://learn.microsoft.com').status)"` |
 | `502 The model's answer did not match the expected schema` | the model returned non-JSON; try a different `OPENAI_MODEL` |
+| Any 502: which step failed? | open `detail.trace_url`, or search Jaeger for `detail.trace_id`. The failing span is marked `ERROR` and carries the exception |
+| A `trace_url` link doesn't open from another machine | it says `localhost` because `LAN_IP` isn't set: set `LAN_IP` (or `TRACE_UI_URL`) in `.env` and run `docker compose … up -d` again |
+| Build log: `WARNING: requirements.lock.txt not found` | a clone without the lock builds from the floors, with whatever is newest today. Run `make lock` and commit the lock |
+| `make test` or `make lint`: `No module named pytest` / `pylint` | run `make venv` first; the targets use `.venv` |
 | Nothing prints to the console | wait ~5 s for the batch flush; Swagger and `/healthz` traffic is excluded on purpose |
 | Spans print but no `[healthz]` lines | `HEALTHZ_INTERVAL_SECONDS=0`, or you are not looking at the `api` service log |
 | Jaeger shows no service | you started with `compose.yaml` only — add `-f compose.jaeger.yaml`; or check `docker compose logs api` for exporter connection errors |
 | `WARNING: Your kernel does not support memory limit capabilities` | the host kernel has the memory cgroup disabled; the app runs but the 3 GB cap is not enforced |
-| `pip` dependency conflict | the OTEL packages must stay in lockstep (core `1.N` ↔ contrib `0.(N+21)b0`); do not pin one without the others |
+| `pip` dependency conflict | the OTEL packages must stay in lockstep (core `1.N` ↔ contrib `0.(N+21)b0`); do not pin one without the others. `make lock` resolves a consistent set |
 | Port 8000 already in use | change the host port: the middle number in both `…:8000:8000` lines of `compose.yaml` |
 | Another machine gets `ERR_CONNECTION_REFUSED` on port 8000 although `docker compose ps` says healthy | the ports are published on `127.0.0.1` only: set `LAN_IP` in `.env` and run `docker compose up -d` again, or tunnel over SSH (VS Code **Ports** view, or `ssh -L 8000:localhost:8000 <host>`). `localhost` in a browser on another machine means that machine |
 | `docker compose up` fails with `cannot assign requested address` | `LAN_IP` is no longer an address of this host (did DHCP hand out a new one?): update `LAN_IP`, or reserve the address on your router |

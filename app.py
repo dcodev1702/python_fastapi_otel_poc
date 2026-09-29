@@ -11,7 +11,7 @@ Description : A small FastAPI service for learning OpenTelemetry (OTEL) end to e
 
 Author      : dcodev1702 & M365 Copilot / Cowork
 Created     : 2026-09-28
-Version     : 0.2.4
+Version     : 0.3.0
 Python      : 3.14.7+
 Run (local) : uvicorn app:app --reload                                  -> http://127.0.0.1:8000/docs
 Run (Docker): docker compose up --build                                 -> http://localhost:8000/docs
@@ -24,6 +24,11 @@ Endpoints
     GET  /tools        lists the Microsoft Learn MCP tools (Learn calls only: no OpenAI, no tokens, free tracing)
     POST /ask          the agent, tools executed locally
     POST /ask-hosted   the agent, tools executed by OpenAI's hosted MCP feature
+
+    Every traced response carries its trace id twice: as the X-Trace-Id header and as `trace_id` in the body,
+    plus `trace_url` - a clickable link into the trace UI - when TRACE_UI_URL is set (compose.jaeger.yaml sets
+    it). A 502 body carries the same two fields, so a failed request can be found in Jaeger as easily as a
+    successful one. /healthz gets neither: it has no span.
 
 Trace shape for POST /ask (local tools)
 
@@ -83,7 +88,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 from pydantic import BaseModel, ConfigDict, Field
 
 SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "foundry-learn-agent")
-SERVICE_VERSION = "0.2.4"
+SERVICE_VERSION = "0.3.0"
 
 # =============================================================================
 # 1. OPENTELEMETRY SETUP
@@ -106,7 +111,11 @@ def configure_opentelemetry() -> str:
     resource = Resource.create({"service.name": SERVICE_NAME, "service.version": SERVICE_VERSION})
     provider = TracerProvider(resource=resource)
 
-    if os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"):
+    if os.getenv("OTEL_TRACES_EXPORTER", "").lower() == "none":
+        # The standard OTEL switch for "collect, but export nowhere". The test suite uses it and attaches its own
+        # in-memory processor to this provider, so it can assert the trace shape without console noise.
+        mode = "none"
+    elif os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"):
         # Ship spans to Jaeger / an OTel Collector / the Aspire Dashboard over OTLP-HTTP, e.g.
         #   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318          (uvicorn on your machine)
         #   OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318             (inside docker compose)
@@ -598,6 +607,9 @@ class AskResponse(AgentResult):
     topic: str
     model: str
     trace_id: str = Field(description="Paste this into Jaeger / your trace UI to find this exact request")
+    trace_url: str | None = Field(
+        None, description="Clickable link to this request's trace; present when TRACE_UI_URL is configured"
+    )
 
 
 class ToolInfo(BaseModel):
@@ -606,6 +618,27 @@ class ToolInfo(BaseModel):
     name: str
     description: str
     parameters: dict[str, Any]
+
+
+class ErrorDetail(BaseModel):
+    """Why an upstream call failed, plus the trace id (and link) that finds the failed request in the trace UI."""
+
+    error: str
+    trace_id: str
+    trace_url: str | None = None
+
+
+class ErrorResponse(BaseModel):
+    """The 502 body: FastAPI wraps the HTTPException detail in `detail`."""
+
+    detail: ErrorDetail
+
+
+# Documents the 502 shape in Swagger for every endpoint that talks to Microsoft Learn or OpenAI.
+UPSTREAM_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    502: {"model": ErrorResponse, "description": "An upstream call (Microsoft Learn, OpenAI) failed or the model "
+          "broke the output schema. `detail.trace_id` finds the failed request in the trace UI."},
+}
 
 
 @asynccontextmanager
@@ -634,19 +667,39 @@ app = FastAPI(
     description=(
         "A small FastAPI service that shows the OpenTelemetry pattern end to end: an inbound request becomes a "
         "server span, and every outbound call the agent makes (Microsoft Learn MCP, OpenAI) becomes a nested "
-        "client span. Every traced response carries its trace_id so you can find it in your trace viewer. "
-        "`/ask` runs the tools locally (every hop visible); `/ask-hosted` lets OpenAI run them (one opaque hop)."
+        "client span. Every traced response carries its trace_id (body and `X-Trace-Id` header) - and a "
+        "`trace_url` into the trace UI when TRACE_UI_URL is set - so you can find it in your trace viewer; 502 "
+        "bodies carry them too. `/ask` runs the tools locally (every hop visible); `/ask-hosted` lets OpenAI "
+        "run them (one opaque hop)."
     ),
     lifespan=lifespan,
 )
 
-# INBOUND: every request becomes a SERVER span - the root of the trace - except the excluded URLs.
-FastAPIInstrumentor.instrument_app(app, excluded_urls=EXCLUDED_URLS)
+
+def current_trace_id() -> str:
+    """The active span's trace id as the 32-hex string Jaeger shows. All zeros means 'no span here'."""
+    return format(trace.get_current_span().get_span_context().trace_id, "032x")
 
 
+def trace_url_for(trace_id: str) -> str | None:
+    """Turn a trace id into a link into the trace UI, using the TRACE_UI_URL template - or None if unset.
+
+    The template holds a literal `{trace_id}` placeholder: `http://localhost:16686/trace/{trace_id}` for Jaeger.
+    It is read per call (not at import) so the tests can set and clear it. All-zero ids mean "no span" -> None.
+    """
+    template = os.getenv("TRACE_UI_URL")
+    if not template or trace_id == "0" * 32:
+        return None
+    return template.replace("{trace_id}", trace_id)
+
+
+# The `stats` middleware is registered BEFORE the FastAPI instrumentation on purpose. Starlette runs the
+# most recently added middleware outermost, and current opentelemetry-instrumentation-fastapi versions force
+# their middleware outermost anyway - either way this one runs INSIDE the SERVER span, so the span is "current"
+# here and the X-Trace-Id header can be stamped on every traced response, including the 502s.
 @app.middleware("http")
 async def count_requests(request: Request, call_next):
-    """Feeds the `stats` counters. Pure Python, no OTEL: this is what plain stdout status looks like."""
+    """Feeds the `stats` counters (pure Python, no OTEL) and echoes the trace id as an X-Trace-Id header."""
     path = request.url.path
     stats.requests[path] += 1
     try:
@@ -656,23 +709,33 @@ async def count_requests(request: Request, call_next):
         raise
     if response.status_code >= 500:
         stats.errors[path] += 1
+    span_context = trace.get_current_span().get_span_context()
+    if span_context.is_valid:  # excluded URLs (/healthz, Swagger) have no span, so they get no header
+        response.headers["X-Trace-Id"] = format(span_context.trace_id, "032x")
     return response
 
 
-def current_trace_id() -> str:
-    """The active span's trace id as the 32-hex string Jaeger shows. All zeros means 'no span here'."""
-    return format(trace.get_current_span().get_span_context().trace_id, "032x")
+# INBOUND: every request becomes a SERVER span - the root of the trace - except the excluded URLs.
+FastAPIInstrumentor.instrument_app(app, excluded_urls=EXCLUDED_URLS)
 
 
 def to_http_error(exc: Exception) -> HTTPException:
-    """Translate agent failures into a 502 (bad upstream) with a readable reason. The span keeps the full stack."""
+    """Translate an upstream failure into a 502 whose body carries the reason AND the trace id to look it up.
+
+    The span keeps the full stack (start_as_current_span recorded the exception); the body carries just enough
+    for a human: a readable reason, the trace id, and - when TRACE_UI_URL is set - a link straight to the trace.
+    """
     if isinstance(exc, APIError):
-        return HTTPException(status_code=502, detail=f"OpenAI error: {exc}")
-    if isinstance(exc, httpx.HTTPError):
-        return HTTPException(status_code=502, detail=f"Microsoft Learn MCP transport error: {exc}")
-    if isinstance(exc, ValueError):  # pydantic ValidationError is a ValueError: the model broke the schema
-        return HTTPException(status_code=502, detail=f"The model's answer did not match the expected schema: {exc}")
-    return HTTPException(status_code=502, detail=str(exc))
+        reason = f"OpenAI error: {exc}"
+    elif isinstance(exc, httpx.HTTPError):
+        reason = f"Microsoft Learn MCP transport error: {exc}"
+    elif isinstance(exc, ValueError):  # pydantic ValidationError is a ValueError: the model broke the schema
+        reason = f"The model's answer did not match the expected schema: {exc}"
+    else:
+        reason = str(exc)
+    trace_id = current_trace_id()
+    detail = ErrorDetail(error=reason, trace_id=trace_id, trace_url=trace_url_for(trace_id))
+    return HTTPException(status_code=502, detail=detail.model_dump())
 
 
 @app.get("/", include_in_schema=False)
@@ -684,7 +747,8 @@ async def root() -> RedirectResponse:
 @app.get("/ping", tags=["ops"], summary="The cheapest way to generate a span")
 async def ping() -> dict[str, Any]:
     """One request -> one SERVER span (plus the ASGI receive/send children). Compare with /healthz."""
-    return {"pong": True, "trace_id": current_trace_id()}
+    trace_id = current_trace_id()
+    return {"pong": True, "trace_id": trace_id, "trace_url": trace_url_for(trace_id)}
 
 
 @app.get("/healthz", tags=["ops"], summary="Liveness probe - NOT traced; the same JSON the heartbeat prints")
@@ -694,7 +758,12 @@ async def healthz() -> dict[str, Any]:
     return stats.snapshot()
 
 
-@app.get("/tools", tags=["agent"], summary="List the Microsoft Learn MCP tools the agent can use")
+@app.get(
+    "/tools",
+    tags=["agent"],
+    summary="List the Microsoft Learn MCP tools the agent can use",
+    responses=UPSTREAM_ERROR_RESPONSES,
+)
 async def list_tools() -> list[ToolInfo]:
     """Talks to Microsoft Learn only - no OpenAI call, no tokens spent. Handy for exercising tracing for free."""
     mcp = McpClient(app.state.http, LEARN_MCP_URL)
@@ -709,7 +778,12 @@ async def list_tools() -> list[ToolInfo]:
     ]
 
 
-@app.post("/ask", tags=["agent"], summary="Ask the agent (tools run locally - every hop is a span)")
+@app.post(
+    "/ask",
+    tags=["agent"],
+    summary="Ask the agent (tools run locally - every hop is a span)",
+    responses=UPSTREAM_ERROR_RESPONSES,
+)
 async def ask(request: AskRequest) -> AskResponse:
     """Runs the full agent loop in this process: LLM -> Microsoft Learn tool calls -> structured answer.
     One trace, many spans: agent.run, one llm.turn per model call, one `mcp ...` span per Learn call."""
@@ -718,10 +792,22 @@ async def ask(request: AskRequest) -> AskResponse:
         result = await run_agent(app.state.openai, mcp, build_user_prompt(**request.model_dump()))
     except (APIError, httpx.HTTPError, ValueError, RuntimeError) as exc:
         raise to_http_error(exc) from exc
-    return AskResponse(**result.model_dump(), topic=request.topic, model=OPENAI_MODEL, trace_id=current_trace_id())
+    trace_id = current_trace_id()
+    return AskResponse(
+        **result.model_dump(),
+        topic=request.topic,
+        model=OPENAI_MODEL,
+        trace_id=trace_id,
+        trace_url=trace_url_for(trace_id),
+    )
 
 
-@app.post("/ask-hosted", tags=["agent"], summary="Ask the agent (OpenAI runs the tools - one opaque span)")
+@app.post(
+    "/ask-hosted",
+    tags=["agent"],
+    summary="Ask the agent (OpenAI runs the tools - one opaque span)",
+    responses=UPSTREAM_ERROR_RESPONSES,
+)
 async def ask_hosted(request: AskRequest) -> AskResponse:
     """Same question, same answer shape, but OpenAI's hosted MCP feature executes the Microsoft Learn tools.
     One trace, FEW spans: agent.run -> llm.turn -> a single api.openai.com call. Compare it with /ask in Jaeger:
@@ -730,4 +816,11 @@ async def ask_hosted(request: AskRequest) -> AskResponse:
         result = await run_agent_hosted(app.state.openai, build_user_prompt(**request.model_dump()))
     except (APIError, ValueError, RuntimeError) as exc:
         raise to_http_error(exc) from exc
-    return AskResponse(**result.model_dump(), topic=request.topic, model=OPENAI_MODEL, trace_id=current_trace_id())
+    trace_id = current_trace_id()
+    return AskResponse(
+        **result.model_dump(),
+        topic=request.topic,
+        model=OPENAI_MODEL,
+        trace_id=trace_id,
+        trace_url=trace_url_for(trace_id),
+    )
