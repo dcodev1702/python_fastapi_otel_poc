@@ -64,14 +64,14 @@ CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI respo
 | File | Role | Notes |
 |---|---|---|
 | `app.py` | Entire application, 5 numbered sections | §1 OTEL setup (+ Step 4 commented), §2 MCP client, §3 agent, §4 health/`stats`, §5 API |
-| `requirements.txt` | Dependencies as **floors**: the intent | Edit this file; OTEL family lockstep enforced by pip |
-| `requirements.lock.txt` | The pinned set the image installs | Produced by `scripts/lock.sh` (`make lock`, `make lock-upgrade`); never edited by hand |
+| `requirements/base.txt` | Dependencies as **floors**: the intent | Edit this file; OTEL family lockstep enforced by pip |
+| `requirements/lock.txt` | The pinned set the image installs | Produced by `scripts/lock.sh` (`make lock`, `make lock-upgrade`); never edited by hand |
 | `scripts/lock.sh` | Resolves the lock with `uv pip compile` inside the Dockerfile's base image, then verifies it | Deletes the lock and fails if `HTTPX2ClientInstrumentor` is missing or openai < 3 |
-| `requirements-dev.txt` | `pytest`, `pylint` | Local and CI only; kept out of the image |
+| `requirements/dev.txt` | `pytest`, `pylint` | Local and CI only; kept out of the image |
 | `tests/conftest.py`, `tests/test_trace_shape.py`, `pytest.ini` | Trace-shape tests (§7) | Fake Learn MCP server under the real httpx client, scripted fake OpenAI client, in-memory span exporter |
 | `Makefile` | Shortcuts: `venv`, `check`, `lock`, `up-jaeger`, `up-aspire`, … | `make` lists them |
 | `.github/workflows/ci.yml` | CI: pylint + tests; compose validation, image build, container smoke test | Runs on pushes to `main` and on pull requests; no secrets |
-| `Dockerfile` | `python:3.14.7-slim`, non-root, installs `requirements.lock.txt` (floors with a warning if absent), `pip check`, HEALTHCHECK on `/healthz` | `PYTHONUNBUFFERED=1` so spans + heartbeat reach `docker compose logs` |
+| `Dockerfile` | `python:3.14.7-slim`, non-root, installs `requirements/lock.txt` (floors with a warning if absent), `pip check`, HEALTHCHECK on `/healthz` | `PYTHONUNBUFFERED=1` so spans + heartbeat reach `docker compose logs` |
 | `compose.yaml` | Console mode; API on `127.0.0.1:8000` (+ `LAN_IP`); `deploy.resources.limits.memory: 3g` | Linux host, Compose v2 |
 | `compose.jaeger.yaml` | Override: adds Jaeger all-in-one (UI on `127.0.0.1` + `LAN_IP`, OTLP/HTTP on `127.0.0.1` only), sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318` and `TRACE_UI_URL` | `docker compose -f compose.yaml -f compose.jaeger.yaml up --build` |
 | `compose.aspire.yaml` | Alternative override: the .NET Aspire Dashboard (UI 18888 on `127.0.0.1` + `LAN_IP`, OTLP/HTTP 18890 on `127.0.0.1` only) | Use instead of the Jaeger override, with `--remove-orphans` when switching |
@@ -163,12 +163,13 @@ Nothing in this path may perform I/O that would create a span.
    itself a lesson about `excluded_urls`. The heartbeat is plain `print` — a deliberate "control group".
 6. **Console exporter by default, OTLP by env var, Azure Monitor commented.** Zero infrastructure first; the
    provider fans out to every processor, so adding a backend never touches application code.
-7. **Floors as intent, a committed lock as what installs.** `requirements.txt` keeps floors (the maintainer wants
-   the newest packages when they choose to upgrade); `requirements.lock.txt`, resolved inside the image's own base
-   by `scripts/lock.sh`, is what the Dockerfile installs, so every build is reproducible and upgrades are a
+7. **Floors as intent, a committed lock as what installs.** `requirements/base.txt` keeps floors (the maintainer
+   wants the newest packages when they choose to upgrade); `requirements/lock.txt`, resolved inside the image's own
+   base by `scripts/lock.sh`, is what the Dockerfile installs, so every build is reproducible and upgrades are a
    reviewable diff (`make lock-upgrade`). The lesson behind it is 0.2.2: `openai>=1.80` let 3.x in overnight, and
    its move to httpx2 silently removed every OpenAI span. pip still enforces OTEL lockstep (contrib packages pin
-   `opentelemetry-semantic-conventions` exactly) and the Dockerfile's `pip check` fails an inconsistent set.
+   `opentelemetry-semantic-conventions` exactly) and the Dockerfile's `pip check` fails an inconsistent set. All
+   dependency files live in `requirements/` (`base.txt`, `lock.txt`, `dev.txt`).
 8. **Compose override files for the trace UI** rather than profiles, so one command both starts the viewer and
    points the exporter at it, with no half-configured state where the exporter targets a viewer that isn't running.
    Jaeger (`compose.jaeger.yaml`) is the default. The Aspire Dashboard (`compose.aspire.yaml`) is the alternative,
@@ -204,7 +205,7 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 | O3 | Tool-call output items have `type == "function_call"` with `.name`, `.arguments` (JSON string), `.call_id`; results are fed back as `{"type":"function_call_output","call_id","output"}`; prior output items can be appended verbatim to `input`. | `run_agent()` | Responses API function-calling guide | Adjust item access / input construction. |
 | O4 | Structured outputs are passed as `text={"format":{"type":"json_schema","name","strict":true,"schema"}}`; final text is `response.output_text`; usage is `response.usage.input_tokens/.output_tokens`. | `BRIEF_TEXT_FORMAT`, `record_usage()` | Responses API structured-outputs guide | Adjust parameter path / attribute names. |
 | O5 | **Hosted MCP tool** shape `{"type":"mcp","server_label","server_url","require_approval":"never"}` (optional `allowed_tools`); output items `mcp_list_tools` (`.tools[].name`) and `mcp_call` (`.name`, `.arguments`, `.output`, `.error`); with `require_approval: "never"` no `mcp_approval_request` items appear; structured outputs may be combined with the `mcp` tool. | `HOSTED_MCP_TOOL`, `run_agent_hosted()` | Responses API → MCP tool guide | Adjust shape / item parsing. If structured outputs cannot be combined with `mcp`, drop `text=` in the hosted call and parse `output_text` leniently. |
-| O6 | `openai>=1.80` is a sufficient floor for the hosted MCP tool and `responses.create`. | `requirements.txt` | SDK changelog | Raise the floor. |
+| O6 | `openai>=3` is a sufficient floor for the hosted MCP tool and `responses.create` (raised from `>=1.80` in 0.3.0 to match the httpx2 transport the code instruments). | `requirements/base.txt` | SDK changelog | Raise the floor. |
 | O7 | `openai.APIError` is the common base of status/connection/timeout errors. | `to_http_error()` | SDK docs | Widen the `except` tuple. |
 
 ### 6.2 Microsoft Learn MCP server
@@ -221,7 +222,7 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 
 | # | Assumed | Where | Verify | If wrong |
 |---|---|---|---|---|
-| T1 | Latest core is **≥ 1.44.0** and the matching contrib is **`0.(N+21)b0`** (1.44.0 ↔ 0.65b0); floors `>=1.44.0,<2` / `>=0.65b0,<1` resolve to a consistent set. | `requirements.txt` | PyPI: `opentelemetry-sdk`, `opentelemetry-instrumentation-httpx` | Adjust floors; keep the lockstep note accurate. |
+| T1 | Latest core is **≥ 1.44.0** and the matching contrib is **`0.(N+21)b0`** (1.44.0 ↔ 0.65b0); floors `>=1.44.0,<2` / `>=0.65b0,<1` resolve to a consistent set. | `requirements/base.txt`, `requirements/lock.txt` | PyPI: `opentelemetry-sdk`, `opentelemetry-instrumentation-httpx` | Adjust floors; keep the lockstep note accurate. |
 | T2 | `FastAPIInstrumentor.instrument_app(app, excluded_urls="<comma-separated regexes>")` exists; passing `excluded_urls` overrides `OTEL_PYTHON_FASTAPI_EXCLUDED_URLS`; `exclude_spans=["receive","send"]` is a valid kwarg (README exercise). | `app.py` §5, README exercises | opentelemetry-instrumentation-fastapi docs | Adjust kwarg names. |
 | T3 | `HTTPXClientInstrumentor().instrument()` and `HTTPX2ClientInstrumentor().instrument()` patch clients created afterwards: our httpx client and the OpenAI SDK's httpx2 one; a `traceparent` header is injected. **Verified 2026-09-28:** openai 3.20.0 is built on `httpx2`, which the httpx instrumentor does not patch, so every `llm.turn` span lacked its child; `HTTPX2ClientInstrumentor` (same package, ≥ 0.65b0) fixed it, and each `llm.turn` now has a `POST api.openai.com` CLIENT child. | `configure_opentelemetry()` | opentelemetry-instrumentation-httpx docs | If newer versions require `instrument_client(client)`, instrument `app.state.http` and `app.state.openai._client` in `lifespan`. |
 | T4 | OTLP/HTTP exporter import path `opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter`; with no args it reads `OTEL_EXPORTER_OTLP_ENDPOINT` and appends `/v1/traces`. | `configure_opentelemetry()` | opentelemetry-exporter-otlp-proto-http docs | Adjust import / pass `endpoint=` explicitly. |
@@ -234,8 +235,8 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 
 | # | Assumed | Where | Verify | If wrong |
 |---|---|---|---|---|
-| A1 | Package **`azure-monitor-opentelemetry-exporter`**; class `azure.monitor.opentelemetry.exporter.AzureMonitorTraceExporter`; no-arg constructor reads `APPLICATIONINSIGHTS_CONNECTION_STRING`. | `configure_opentelemetry()` Step 4 block; `requirements.txt` | Azure SDK for Python docs | Fix import/constructor in the commented block. |
-| A2 | The exporter is compatible with the resolved `opentelemetry-sdk` version. | `requirements.txt` | package metadata | Add a version constraint on the commented line. |
+| A1 | Package **`azure-monitor-opentelemetry-exporter`**; class `azure.monitor.opentelemetry.exporter.AzureMonitorTraceExporter`; no-arg constructor reads `APPLICATIONINSIGHTS_CONNECTION_STRING`. | `configure_opentelemetry()` Step 4 block; `requirements/base.txt` | Azure SDK for Python docs | Fix import/constructor in the commented block. |
+| A2 | The exporter is compatible with the resolved `opentelemetry-sdk` version. | `requirements/base.txt` (then `make lock`) | package metadata | Add a version constraint on the commented line. |
 | A3 | Portal mapping: SERVER→requests, CLIENT→dependencies (HTTP), INTERNAL→dependencies (InProc), attributes→customDimensions, exceptions→exceptions, `service.name`→`cloud_RoleName`. | Step 4 comments; README | Azure Monitor OpenTelemetry docs | Correct the comment text. |
 | A4 | Connection string carries `IngestionEndpoint`, so Azure Government works without code changes. | Step 4 comments; README | Azure Monitor docs | Correct the comment text. |
 
@@ -271,7 +272,7 @@ make venv && make check
 # 0. Build + start (console mode)
 cp .env.example .env && $EDITOR .env
 docker compose up --build -d && sleep 5 && docker compose logs api | head -40
-#    EXPECT: ">> installing the pinned set from requirements.lock.txt" in the build; a "[healthz] {...}" line within
+#    EXPECT: ">> installing the pinned set from requirements/lock.txt" in the build; a "[healthz] {...}" line within
 #            the first lines; no tracebacks; uvicorn "Application startup complete".
 
 # 1. Untraced probe

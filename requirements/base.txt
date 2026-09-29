@@ -2,11 +2,11 @@
 # Author : dcodev1702 & M365 Copilot / Cowork   Created: 2026-09-28
 #
 # FLOORS, NOT PINS: every line names the oldest release known to work. This file is what you EDIT; the file the
-# image INSTALLS is requirements.lock.txt - the fully resolved, pinned set that `scripts/lock.sh` produces from
+# image INSTALLS is requirements/lock.txt - the fully resolved, pinned set that `scripts/lock.sh` produces from
 # this one inside the same python:3.14.7-slim base image the Dockerfile uses. That split gives you both things at
-# once: newest-compatible packages when you *choose* to upgrade (`scripts/lock.sh --upgrade`, then review the
-# diff), and a build that installs the same bytes tomorrow as it did today. The lesson behind it is already in
-# the CHANGELOG (0.2.2): `openai>=1.80` let 3.x in overnight and every OpenAI span vanished until someone looked.
+# once: newest-compatible packages when you *choose* to upgrade (`make lock-upgrade`, then review the diff), and a
+# build that installs the same bytes tomorrow as it did today. The lesson behind it is already in the CHANGELOG
+# (0.2.2): `openai>=1.80` let 3.x in overnight and every OpenAI span vanished until someone looked.
 #
 # The OpenTelemetry family must stay in lockstep - core 1.N.0 pairs with contrib 0.(N+21)b0, e.g. 1.44.0 <->
 # 0.65b0 - and pip enforces that for you: the contrib packages pin opentelemetry-semantic-conventions to their
@@ -29,5 +29,6 @@ opentelemetry-instrumentation-fastapi>=0.65b0,<1    # inbound:  request -> SERVE
 opentelemetry-instrumentation-httpx>=0.65b0,<1
 
 # --- STEP 4 (optional): Azure Monitor / Application Insights ---------------------------------------------
-# Uncomment together with the Step 4 block in app.py, then set APPLICATIONINSIGHTS_CONNECTION_STRING.
+# Uncomment together with the Step 4 block in app.py, run `make lock` so the image installs it too, then set
+# APPLICATIONINSIGHTS_CONNECTION_STRING.
 # azure-monitor-opentelemetry-exporter

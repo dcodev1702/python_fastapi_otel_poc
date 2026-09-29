@@ -138,7 +138,7 @@ def configure_opentelemetry() -> str:
     # transaction view and the requests / dependencies / exceptions tables.
     #
     # To enable:
-    #   1. pip install azure-monitor-opentelemetry-exporter        (also uncomment it in requirements.txt)
+    #   1. pip install azure-monitor-opentelemetry-exporter   (Docker: uncomment it in requirements/base.txt, make lock)
     #   2. export APPLICATIONINSIGHTS_CONNECTION_STRING="InstrumentationKey=...;IngestionEndpoint=https://...;..."
     #      Portal: Application Insights resource -> Overview -> Connection String. The string carries the
     #      ingestion endpoint, so Azure Government / other sovereign clouds work with no code change.

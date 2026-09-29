@@ -44,10 +44,8 @@ Where each piece runs and what talks to what; the numbered flows are explained i
 | File | Purpose |
 |---|---|
 | `app.py` | The whole program in five numbered sections: OTEL setup (with **Step 4 / Azure Monitor built in, commented out**), Microsoft Learn MCP client, the agent (prompts + local loop + hosted variant), health + `stats` heartbeat, the API |
-| `requirements.txt` | Dependencies as *floors*: the intent you edit. The OTEL family stays in lockstep automatically |
-| `requirements.lock.txt` | The exact, pinned set the image installs, made from `requirements.txt` by `scripts/lock.sh` (see *Dependencies*) |
+| `requirements/` | Dependencies, in one place (see *Dependencies*). `base.txt` holds the *floors*: the intent you edit, with the OTEL family in lockstep. `lock.txt` is the exact, pinned set the image installs, made from `base.txt` by `scripts/lock.sh`. `dev.txt` has the test and lint tools (`pytest`, `pylint`), never installed in the image |
 | `scripts/lock.sh` | Resolves the lock inside the Dockerfile's base image and checks it before keeping it |
-| `requirements-dev.txt` | Test and lint tools (`pytest`, `pylint`); never installed in the image |
 | `tests/`, `pytest.ini` | Trace-shape tests against a fake Microsoft Learn server and a fake OpenAI client: no network, no key, no tokens |
 | `Makefile` | Shortcuts: `make venv`, `make check`, `make lock`, `make up-jaeger`, `make up-aspire`; `make` lists them all |
 | `.github/workflows/ci.yml` | GitHub Actions: pylint and the tests, then an image build and a container smoke test, on every push and pull request |
@@ -75,7 +73,7 @@ Where each piece runs and what talks to what; the numbered flows are explained i
 
 ```bash
 cp .env.example .env            # put your OPENAI_API_KEY in .env
-docker compose up --build       # builds the image from requirements.lock.txt, starts the API on :8000
+docker compose up --build       # builds the image from requirements/lock.txt, starts the API on :8000
 ```
 
 Open <http://localhost:8000/docs>. In a second terminal, watch the spans and the heartbeat:
@@ -145,7 +143,7 @@ uvicorn app:app --reload
 ```
 
 Without `make` or `uv`, the equivalent is `python3 -m venv .venv` followed by
-`.venv/bin/pip install -r requirements.lock.txt -r requirements-dev.txt`.
+`.venv/bin/pip install -r requirements/lock.txt -r requirements/dev.txt`.
 
 Open <http://127.0.0.1:8000/docs>. uvicorn listens on `127.0.0.1` only unless you pass `--host`; to allow your LAN,
 pass this machine's LAN address, never `--host 0.0.0.0`. To use Jaeger from a local run, start only Jaeger from the override file
@@ -180,15 +178,16 @@ VS Code's **Testing** view runs the same tests. On every push and pull request, 
 
 ## Dependencies: floors and a lock
 
-`requirements.txt` holds *floors*: the oldest release of each package known to work. That's the intent, and it's
-the file you edit. The image installs `requirements.lock.txt` instead: the exact versions `scripts/lock.sh`
-resolved from those floors inside the Dockerfile's own base image. So a rebuild installs the same packages
-tomorrow as today, and newer releases arrive only when you ask for them:
+All three dependency files live in `requirements/`. `base.txt` holds *floors*: the oldest release of each package
+known to work. That's the intent, and it's the file you edit. The image installs `lock.txt` instead: the exact
+versions `scripts/lock.sh` resolved from those floors inside the Dockerfile's own base image. So a rebuild installs
+the same packages tomorrow as today, and newer releases arrive only when you ask for them. `dev.txt` adds the test
+and lint tools for `.venv` and CI.
 
 | Command | When |
 |---|---|
-| `make lock-upgrade` | you want the newest releases the floors allow. Review `git diff requirements.lock.txt`, run `make check`, rebuild |
-| `make lock` | after editing `requirements.txt`; versions stay put where the floors still allow them |
+| `make lock-upgrade` | you want the newest releases the floors allow. Review `git diff requirements/lock.txt`, run `make check`, rebuild |
+| `make lock` | after editing `requirements/base.txt`; versions stay put where the floors still allow them |
 
 Before keeping a new lock, the script installs it in a throwaway environment and checks the facts the traces depend
 on. For example, `HTTPX2ClientInstrumentor` must still exist, because openai 3.x moved to httpx2, and without that
@@ -310,7 +309,8 @@ file changes: the provider fans out every span to the console (or OTLP) **and** 
 
 To enable it:
 
-1. `pip install azure-monitor-opentelemetry-exporter` — or uncomment the line in `requirements.txt` and rebuild.
+1. `pip install azure-monitor-opentelemetry-exporter` for a local run. For Docker, uncomment its line in
+   `requirements/base.txt`, run `make lock` (the image installs the lock, not the floors), and rebuild.
 2. Put `APPLICATIONINSIGHTS_CONNECTION_STRING=...` in `.env` (Application Insights resource → Overview →
    Connection String). The string includes the ingestion endpoint, so an Azure Government resource works with
    no code change.
@@ -384,7 +384,7 @@ Both live at the top of section 3 in `app.py`.
 | `502 The model's answer did not match the expected schema` | the model returned non-JSON; try a different `OPENAI_MODEL` |
 | Any 502: which step failed? | open `detail.trace_url`, or search Jaeger for `detail.trace_id`. The failing span is marked `ERROR` and carries the exception |
 | A `trace_url` link doesn't open from another machine | it says `localhost` because `LAN_IP` isn't set: set `LAN_IP` (or `TRACE_UI_URL`) in `.env` and run `docker compose … up -d` again |
-| Build log: `WARNING: requirements.lock.txt not found` | a clone without the lock builds from the floors, with whatever is newest today. Run `make lock` and commit the lock |
+| Build log: `WARNING: requirements/lock.txt not found` | a clone without the lock builds from the floors, with whatever is newest today. Run `make lock` and commit the lock |
 | `make test` or `make lint`: `No module named pytest` / `pylint` | run `make venv` first; the targets use `.venv` |
 | Nothing prints to the console | wait ~5 s for the batch flush; Swagger and `/healthz` traffic is excluded on purpose |
 | Spans print but no `[healthz]` lines | `HEALTHZ_INTERVAL_SECONDS=0`, or you are not looking at the `api` service log |

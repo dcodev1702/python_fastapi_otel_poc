@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Foundry Learn Agent - resolve requirements.txt into requirements.lock.txt
+# Foundry Learn Agent - resolve requirements/base.txt into requirements/lock.txt
 # Author : dcodev1702 & M365 Copilot / Cowork
 # Created: 2026-09-29
 #
 # Produces the fully pinned set the Dockerfile installs. By default it resolves INSIDE the same base image the
 # Dockerfile uses (read from its FROM line), so the lock matches the container's Python and platform exactly.
 #
-#   scripts/lock.sh              first lock, or re-lock after editing requirements.txt (keeps versions if allowed)
+#   scripts/lock.sh              first lock, or re-lock after editing requirements/base.txt (keeps versions if allowed)
 #   scripts/lock.sh --upgrade    move every package to the newest release the floors allow, then `git diff` it
 #   scripts/lock.sh --local      resolve with a `uv` already installed on this machine instead of in Docker
 #
@@ -36,10 +36,10 @@ BASE_IMAGE=$(sed -n 's/^FROM[[:space:]]\+\([^[:space:]]\+\).*/\1/p' Dockerfile |
 # never drift apart. A failed verification removes the lock file before the script exits.
 STEPS=$(cat <<EOS
 set -euo pipefail
-trap 'rm -f requirements.lock.txt; echo "lock FAILED - requirements.lock.txt removed" >&2' ERR
-uv pip compile requirements.txt --output-file requirements.lock.txt ${UPGRADE}
+trap 'rm -f requirements/lock.txt; echo "lock FAILED - requirements/lock.txt removed" >&2' ERR
+uv pip compile requirements/base.txt --output-file requirements/lock.txt ${UPGRADE}
 python3 -m venv /tmp/lockcheck
-uv pip install --quiet --python /tmp/lockcheck/bin/python -r requirements.lock.txt
+uv pip install --quiet --python /tmp/lockcheck/bin/python -r requirements/lock.txt
 /tmp/lockcheck/bin/python - <<'PY'
 import importlib.metadata as metadata
 from opentelemetry.instrumentation.httpx import HTTPX2ClientInstrumentor  # noqa: F401  (the OpenAI spans need it)
@@ -62,11 +62,11 @@ else
     INNER="set -euo pipefail
 pip install --quiet --disable-pip-version-check uv
 $STEPS
-chown \$HOST_UID:\$HOST_GID requirements.lock.txt"
+chown \$HOST_UID:\$HOST_GID requirements/lock.txt"
     docker run --rm \
         -v "$PWD":/work -w /work \
         -e "HOST_UID=$(id -u)" -e "HOST_GID=$(id -g)" \
         "$BASE_IMAGE" bash -c "$INNER"
 fi
 
-echo ">> wrote requirements.lock.txt ($(grep -c '==' requirements.lock.txt) pinned packages). Review it, then commit it."
+echo ">> wrote requirements/lock.txt ($(grep -c '==' requirements/lock.txt) pinned packages). Review it, then commit it."

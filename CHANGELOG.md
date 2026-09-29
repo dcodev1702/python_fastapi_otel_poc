@@ -7,6 +7,28 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
+### Changed
+
+- The dependency files have their own directory, `requirements/`:
+  - `requirements.txt` becomes `requirements/base.txt`, the floors you edit;
+  - `requirements.lock.txt` becomes `requirements/lock.txt`, the pinned set the image installs;
+  - `requirements-dev.txt` becomes `requirements/dev.txt`, the test and lint tools.
+
+  The Dockerfile copies the directory; `scripts/lock.sh`, the Makefile, CI, `.dockerignore` and the docs use the
+  new paths. The lock was regenerated in place, and its 47 pins are unchanged.
+- Step 4 (Azure Monitor): for Docker, uncomment the exporter in `requirements/base.txt` and run `make lock`
+  before rebuilding. Since 0.3.0 the image installs the lock, so uncommenting the floor alone no longer reached
+  the image. The README, `app.py`'s Step 4 comment and `requirements/base.txt` now say so. Also removed a stale
+  `.gitignore` comment about generating the lock with `pip freeze`.
+
+### Fixed
+
+- CI's container smoke test raced the 5 s heartbeat: it could read the startup `[healthz]` line, logged before any
+  request, and fail. It happened on the first 0.3.0 run. The step now polls for a heartbeat that counted `/healthz`,
+  and the `/ping` span check polls too.
+- CI's "no `X-Trace-Id` on `/healthz`" and "no `/healthz` span" checks could never fail: GitHub runs steps with
+  `bash -e`, which ignores a failing command negated with `!`. They are now explicit `if … exit 1` checks.
+
 ## [0.3.0] - 2026-09-29
 
 Trace ids on every response and failure, a committed dependency lock, trace-shape tests with CI, and the Aspire

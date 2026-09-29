@@ -34,19 +34,19 @@ jobs:
           python-version: "3.14.7"                   # the Dockerfile's base image (python:3.14.7-slim)
           cache: pip
           cache-dependency-path: |
-            requirements.lock.txt
-            requirements-dev.txt
+            requirements/lock.txt
+            requirements/dev.txt
 
       - name: Install dependencies (lock if present, floors otherwise)
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.lock.txt ]; then
-            pip install -r requirements.lock.txt
+          if [ -f requirements/lock.txt ]; then
+            pip install -r requirements/lock.txt
           else
-            echo "::warning::requirements.lock.txt not found - installing floors; run scripts/lock.sh and commit the lock"
-            pip install -r requirements.txt
+            echo "::warning::requirements/lock.txt not found - installing floors; run scripts/lock.sh and commit the lock"
+            pip install -r requirements/base.txt
           fi
-          pip install -r requirements-dev.txt
+          pip install -r requirements/dev.txt
           pip check
 
       - name: Pylint (the project keeps app.py and the tests at 10.00/10)
@@ -89,17 +89,31 @@ jobs:
           TRACE_ID=$(python3 -c "import json; print(json.load(open('body.json'))['trace_id'])")
           echo "$TRACE_ID" | grep -Eq '^[0-9a-f]{32}$'
           grep -i "^x-trace-id: $TRACE_ID" headers.txt
-          sleep 2                                    # BatchSpanProcessor flush (OTEL_BSP_SCHEDULE_DELAY=500 ms)
-          docker logs api | grep -q '"name": "GET /ping"'
-          docker logs api | grep -q "\"trace_id\": \"0x$TRACE_ID\""
+          # Poll rather than sleep: the BatchSpanProcessor flushes every OTEL_BSP_SCHEDULE_DELAY (500 ms here).
+          for i in $(seq 1 20); do
+            docker logs api 2>/dev/null | grep -q "\"trace_id\": \"0x$TRACE_ID\"" && break
+            sleep 0.5
+          done
+          docker logs api 2>/dev/null | grep -q '"name": "GET /ping"'
+          docker logs api 2>/dev/null | grep -q "\"trace_id\": \"0x$TRACE_ID\""
 
       - name: "/healthz is not traced: no header, no span, but counted by the heartbeat"
         run: |
           curl -sS -D headers.txt -o /dev/null http://127.0.0.1:8000/healthz
-          ! grep -qi '^x-trace-id:' headers.txt
-          sleep 2
-          ! docker logs api | grep -q '"name": "GET /healthz"'
-          docker logs api | grep '\[healthz\]' | tail -n 1 | grep -q '"/healthz"'
+          # Explicit if/exit: under `bash -e` a negated command (`! grep ...`) never fails the step.
+          if grep -qi '^x-trace-id:' headers.txt; then echo "/healthz must not carry X-Trace-Id" >&2; exit 1; fi
+          sleep 2                                    # four flush intervals: long enough for a span to show up
+          if docker logs api 2>/dev/null | grep -q '"name": "GET /healthz"'; then
+            echo "/healthz must not create a span" >&2; exit 1
+          fi
+          # The heartbeat prints every HEALTHZ_INTERVAL_SECONDS (5 s here), so the newest [healthz] line may still
+          # be the one printed at startup, before any request. Wait for a line that counted /healthz.
+          for i in $(seq 1 15); do
+            docker logs api 2>/dev/null | grep '\[healthz\]' | tail -n 1 | grep -q '"/healthz"' && exit 0
+            sleep 1
+          done
+          echo "no [healthz] line counted /healthz within 15 s" >&2
+          exit 1
 
       - name: Container logs (on failure)
         if: failure()

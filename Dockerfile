@@ -24,20 +24,20 @@ WORKDIR /app
 
 # Dependencies first so this layer is cached until the requirements change.
 #
-# requirements.lock.txt is the resolved, pinned set that scripts/lock.sh produced from requirements.txt inside
-# this very base image - installing it makes every build reproducible. The trailing `*` makes the lock file
-# optional to COPY, so a clone without one still builds - from the floors, with a loud warning, because that build
-# picks up whatever is newest on PyPI today (the httpx2 surprise in CHANGELOG 0.2.2 is what that looks like).
+# requirements/lock.txt is the resolved, pinned set that scripts/lock.sh produced from requirements/base.txt inside
+# this very base image - installing it makes every build reproducible. A clone without the lock still builds, from
+# the floors in base.txt, with a loud warning, because that build picks up whatever is newest on PyPI today (the
+# httpx2 surprise in CHANGELOG 0.2.2 is what that looks like). requirements/dev.txt is kept out by .dockerignore.
 # `pip check` fails the build if the installed set is inconsistent (e.g. an OpenTelemetry package out of lockstep).
-COPY requirements.txt requirements.lock.txt* ./
+COPY requirements/ requirements/
 RUN python -m pip install --upgrade pip setuptools wheel \
- && if [ -f requirements.lock.txt ]; then \
-        echo ">> installing the pinned set from requirements.lock.txt" \
-        && python -m pip install -r requirements.lock.txt; \
+ && if [ -f requirements/lock.txt ]; then \
+        echo ">> installing the pinned set from requirements/lock.txt" \
+        && python -m pip install -r requirements/lock.txt; \
     else \
-        echo ">> WARNING: requirements.lock.txt not found - installing floors from requirements.txt." \
+        echo ">> WARNING: requirements/lock.txt not found - installing floors from requirements/base.txt." \
         && echo ">>          Run scripts/lock.sh and commit the lock for reproducible builds." \
-        && python -m pip install -r requirements.txt; \
+        && python -m pip install -r requirements/base.txt; \
     fi \
  && python -m pip check \
  && python -m pip list --format=columns

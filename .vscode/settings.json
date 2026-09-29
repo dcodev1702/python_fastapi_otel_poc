@@ -1,6 +1,6 @@
 {
     // Lint and analyse app.py with the project's .venv (README: "Run it locally instead"). The system Python has
-    // none of requirements.txt installed, so Pylint and Pylance would flag every third-party import as unresolved.
+    // none of requirements/ installed, so Pylint and Pylance would flag every third-party import as unresolved.
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
     "pylint.interpreter": ["${workspaceFolder}/.venv/bin/python"],
     // The Testing view runs the trace-shape tests with pytest (pytest.ini holds the settings).

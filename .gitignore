@@ -11,6 +11,3 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-
-# lock file you may generate with `pip freeze` - commit it on purpose if you want reproducible builds
-# requirements.lock.txt

@@ -1,5 +1,4 @@
-# Keep secrets and clutter out of the Docker build context (only requirements.txt, requirements.lock.txt and app.py
-# are COPY'd anyway)
+# Keep secrets and clutter out of the Docker build context (only requirements/ and app.py are COPY'd anyway)
 .env
 .env.*
 !.env.example
@@ -21,4 +20,4 @@ scripts/
 .github/
 Makefile
 pytest.ini
-requirements-dev.txt
+requirements/dev.txt
