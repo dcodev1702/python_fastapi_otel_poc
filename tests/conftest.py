@@ -42,6 +42,7 @@ os.environ["OTEL_METRICS_EXPORTER"] = "none"  # forced: a shell with metrics/log
 os.environ["OTEL_LOGS_EXPORTER"] = "none"
 os.environ.setdefault("HEALTHZ_INTERVAL_SECONDS", "0")
 os.environ.pop("TRACE_UI_URL", None)  # individual tests opt in with monkeypatch
+os.environ.pop("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", None)  # content capture: tests opt in too
 os.environ.pop("OTEL_EXPORTER_OTLP_ENDPOINT", None)
 
 # pylint: disable=wrong-import-position  # the environment above must be in place before app.py is imported

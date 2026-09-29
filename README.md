@@ -4,7 +4,7 @@
 |---|---|
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
-| **Version** | 0.4.0 |
+| **Version** | 0.5.0 |
 | **Runs on** | Python 3.14.7+ locally, or Docker Compose on Linux (container capped at 3 GB RAM) |
 
 A small, runnable service for learning how OpenTelemetry (OTEL) tracing works in a Python API that drives an
@@ -16,6 +16,9 @@ visibility you give up for less code.
 Traces are one of OpenTelemetry's three *signals*. The same app also records **metrics** (token usage, LLM and tool
 latency, request rates, memory) and **structured logs**, each log stamped with the trace it happened in. Switch
 those two on with the Aspire Dashboard override, and all three signals appear side by side.
+
+With Jaeger or Aspire, the trace also shows **what was said**, not just that a call happened. That means the prompt
+sent to the model, the model's answer and the data Microsoft Learn returned; see *See the data to and from the model*.
 
 ```
 POST /ask  (tools run here)                                 POST /ask-hosted  (OpenAI runs the tools)
@@ -50,7 +53,7 @@ Where each piece runs and what talks to what; the numbered flows are explained i
 | `app.py` | The whole program in five numbered sections: OTEL setup (with **Step 4 / Azure Monitor built in, commented out**), Microsoft Learn MCP client, the agent (prompts + local loop + hosted variant), health + `stats` heartbeat, the API |
 | `requirements/` | Dependencies, in one place (see *Dependencies*). `base.txt` holds the *floors*: the intent you edit, with the OTEL family in lockstep. `lock.txt` is the exact, pinned set the image installs, made from `base.txt` by `scripts/lock.sh`. `dev.txt` has the test and lint tools (`pytest`, `pylint`), never installed in the image |
 | `scripts/lock.sh` | Resolves the lock inside the Dockerfile's base image and checks it before keeping it |
-| `tests/`, `pytest.ini` | Trace-shape tests, plus metrics and logs tests, against a fake Microsoft Learn server and a fake OpenAI client: no network, no key, no tokens |
+| `tests/`, `pytest.ini` | Trace-shape tests, plus metrics, logs and content-capture tests, against a fake Microsoft Learn server and a fake OpenAI client: no network, no key, no tokens |
 | `Makefile` | Shortcuts: `make venv`, `make check`, `make lock`, `make up-jaeger`, `make up-aspire`; `make` lists them all |
 | `.github/workflows/ci.yml` | GitHub Actions: pylint and the tests, then an image build and a container smoke test, on every push and pull request |
 | `Dockerfile` | `python:3.14.7-slim`, non-root, installs the lock and runs `pip check`, health check on `/healthz` |
@@ -155,6 +158,38 @@ same IPv4-only rules as Jaeger's.
 | `process.memory.usage` | observable, `By` | resident memory, read at each collection | — |
 | `http.server.*`, `http.client.*` | from the instrumentations | request duration, in-flight requests, sizes; not recorded for the excluded `/healthz` | HTTP semantic conventions |
 
+### See the data to and from the model
+
+By default a trace shows *that* the app talked to OpenAI and Microsoft Learn, not *what* was said. The HTTP
+instrumentation records method, URL, status and timing only, never request or response bodies, and our own spans
+stop at counts. **GenAI content capture** fills that gap. With
+`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY`, the app records the content itself on its spans,
+in the OpenTelemetry GenAI semantic-convention format (JSON strings):
+
+| Span | What you see |
+|---|---|
+| `agent.run` | `gen_ai.input.messages`: the user prompt. `gen_ai.output.messages`: the brief the API returned |
+| `llm.turn` | `gen_ai.system_instructions`: the system prompt. `gen_ai.input.messages`: everything this call sent — the prompt, the model's earlier tool calls and each tool result it was given. `gen_ai.output.messages`: what came back — the tool calls it asks for, or the final answer. `gen_ai.tool.definitions`: the tools it was offered |
+| `mcp tools/call <tool>` | `gen_ai.tool.call.arguments`: what the model asked Learn for. `gen_ai.tool.call.result`: exactly what Learn sent back |
+
+**The Jaeger and Aspire overrides turn it on**; console mode leaves it off, and so do the tests unless they ask for
+it. The viewers show it as a conversation:
+- **Jaeger:** open a trace (it opens in **GenAI View**), click an `llm.turn`, and scroll to **Conversation**: SYSTEM,
+  USER, ASSISTANT → the tool call, TOOL ← Learn's result, then ASSISTANT with the answer.
+- **Aspire:** open a trace, then the **GenAI details** button on an `llm.turn`: the **Input & output** tab shows the
+  same conversation, **Tools** shows the tool definitions, and the token count sits in the header.
+
+It also opens up the opaque hop. `/ask-hosted`'s Learn calls happen on OpenAI's side, so they never become spans,
+but their arguments and output come back in the response. With capture on, they appear in `llm.turn`'s output as
+`server_tool_call` parts: you can see *what* OpenAI asked Learn and got back, just not how long it took.
+
+Content is large (one `/ask` records roughly 100 KB; a single Learn result can be 40 KB) and can be sensitive,
+because prompts and results are stored in the trace viewer. That's fine on your own machine; for anything shared, set
+`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=NO_CONTENT` in `.env` and run `docker compose … up -d` again.
+Even with capture off, the spans keep the GenAI metadata: `gen_ai.operation.name` (`invoke_agent`, `chat`,
+`execute_tool`), `gen_ai.provider.name`, `gen_ai.response.model`, `gen_ai.response.id` and
+`gen_ai.response.finish_reasons`.
+
 ## Run it locally instead (venv)
 
 ```bash
@@ -179,7 +214,7 @@ lacks these packages and flag every third-party import as unresolved.
 ## Run the tests
 
 ```bash
-make check                      # pylint app.py tests (10.00/10), then pytest: 20 tests in about a second
+make check                      # pylint app.py tests (10.00/10), then pytest: 29 tests in about a second
 ```
 
 The trace is this project's deliverable, so the tests assert the trace itself: which spans each endpoint produces,
@@ -192,6 +227,9 @@ The other two signals are tested as well:
 - the metrics each call records, with their values and attributes;
 - the free HTTP metrics, which skip `/healthz`;
 - log records carrying their request's trace id, and a failure's exception details.
+
+So is content capture: off by default, and when on, every message, tool call and tool result in the GenAI format,
+for both agent loops.
 
 They need no network, no API key and no tokens:
 - A fake Microsoft Learn MCP server sits under the app's real httpx client, so the real instrumentation makes real
@@ -241,7 +279,8 @@ All optional; set in `.env` (Docker) or export in your shell (local).
 | `OTEL_TRACES_EXPORTER` | unset | `none` attaches no console or OTLP exporter; the tests use it and collect spans in memory instead |
 | `OTEL_METRICS_EXPORTER` | unset → off | `otlp` (set by the Aspire override) or `console`; off otherwise, because Jaeger stores traces only |
 | `OTEL_LOGS_EXPORTER` | unset → off | `otlp` (set by the Aspire override) or `console`. The `[log]` lines on stdout print either way |
-| `OTEL_METRIC_EXPORT_INTERVAL` | `60000` | ms between metric exports; the Aspire override uses `10000` |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `60000` | ms between metric exports; the Aspire override passes the `.env` value, `10000` when unset |
+| `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` | unset → off; `SPAN_ONLY` in the Jaeger and Aspire overrides | `SPAN_ONLY` records the prompts, model output and tool data on the spans; `NO_CONTENT` turns it off |
 
 ## Try it — in this order
 
@@ -280,12 +319,13 @@ The response has `mode: "local-tools"`, the brief (`paragraphs`, `links`), how m
 
 **5. `POST /ask-hosted` — same question, OpenAI runs the tools.** Same body, same answer shape, but
 `mode: "hosted-mcp"`, `turns: 1`, and every `tool_calls[].duration_ms` is `null` — you did not make those
-calls, OpenAI did. In Jaeger the trace collapses to `agent.run → llm.turn → one POST api.openai.com`.
+calls, OpenAI did. In Jaeger the trace collapses to `agent.run → llm.turn → one POST api.openai.com`. With content
+capture on, that one `llm.turn` still shows what OpenAI asked Learn and what came back.
 
 **6. Watch the heartbeat.** Every 60 s the log shows one line like
 
 ```
-[healthz] {"status": "ok", "service": "foundry-learn-agent", "version": "0.4.0", "time": "...", "uptime_s": 420,
+[healthz] {"status": "ok", "service": "foundry-learn-agent", "version": "0.5.0", "time": "...", "uptime_s": 420,
            "exporter": {"traces": "console", "metrics": "none", "logs": "none"}, "model": "gpt-5.6-luna",
            "rss_mb": 96.4, "requests": {"/healthz": 7, "/ping": 1, "/tools": 2, "/ask": 1, "/ask-hosted": 1},
            "errors": {}, "llm_turns": 4, "tool_calls": 5, "tokens": {"input_tokens": 18342, "output_tokens": 1210}}
@@ -302,6 +342,11 @@ call, split by `gen_ai.token.type` and `agent.mode`, with exemplars that open th
 `mcp.tool.name`, or search for "failed". The `[log]` lines in `docker compose logs api` are the same records in plain
 text, each ending in its `trace_id`.
 
+**8. Read the conversation.** Open step 4's `trace_url`. In Jaeger (GenAI View) or Aspire (**GenAI details**), click
+the last `llm.turn`. You see the whole exchange: the system prompt, your request, the model's tool call, the Learn
+result it read, and the answer it wrote from that. Then open an `mcp tools/call …` span:
+`gen_ai.tool.call.result` is Learn's raw response.
+
 ## Reading the console output
 
 - A span is printed **when it ends**, so children appear *before* their parents; the SERVER span is last.
@@ -314,7 +359,11 @@ text, each ending in its `trace_id`.
   `http.status_code` or the newer `http.request.method` / `url.full` / `http.response.status_code`.
 - Our own attributes: `agent.mode`, `agent.turn`, `agent.turns`, `agent.tools`, `agent.tool_calls`,
   `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens` (per `llm.turn` and totalled
-  on `agent.run`), `mcp.tool.name`, `mcp.tool.arguments`, `rpc.method`.
+  on `agent.run`), `mcp.tool.name`, `mcp.tool.arguments`, `rpc.method`. GenAI metadata as well:
+  `gen_ai.operation.name` (`invoke_agent` on `agent.run`, `chat` on `llm.turn`, `execute_tool` on
+  `mcp tools/call`), `gen_ai.provider.name`, `gen_ai.response.model`, `gen_ai.response.id`,
+  `gen_ai.response.finish_reasons`, `gen_ai.tool.name`. Content attributes appear only with capture on, which console
+  mode leaves off.
 - A failed tool call shows up as an `exception` event on `agent.run` (local) or an `mcp_call.error` event
   (hosted); a request that fails outright marks its spans `status: ERROR`.
 - Our own log records print as `[log] LEVEL message trace_id=<32 hex>`, for example
@@ -408,6 +457,9 @@ Both live at the top of section 3 in `app.py`.
 11. **Logs vs events.** A failed tool call leaves three traces of itself: an `exception` event on `agent.run`, a
     WARNING log record and `agent.tool.calls{error.type=…}`. Break a call (exercise 7), then find all three in
     Aspire and decide which one you'd alert on.
+12. **Grounded or not?** Ask about something narrow, then compare the answer (on `agent.run`) with the Learn results
+    the model read (the TOOL messages of the last `llm.turn`). Is every sentence backed by a result, and is every link
+    one that appeared there? That check is what content capture is for, and it's the start of an evaluation.
 
 ## Where to go next
 
@@ -438,6 +490,7 @@ Both live at the top of section 3 in `app.py`.
 | Spans print but no `[healthz]` lines | `HEALTHZ_INTERVAL_SECONDS=0`, or you are not looking at the `api` service log |
 | Jaeger shows no service | you started with `compose.yaml` only — add `-f compose.jaeger.yaml`; or check `docker compose logs api` for exporter connection errors |
 | Aspire's **Metrics** or **Structured logs** is empty | metrics and logs are only on with `compose.aspire.yaml`: check `exporter` in `/healthz`. Metrics arrive every 10 s, so wait a moment |
+| No **Conversation** in Jaeger, or Aspire's GenAI details says message content isn't recorded | content capture is off: `docker compose exec api printenv OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` should print `SPAN_ONLY`. Console mode leaves it off; check `.env` doesn't set `NO_CONTENT` |
 | Exporter errors (404s) for `/v1/metrics` or `/v1/logs` in Jaeger mode | `OTEL_METRICS_EXPORTER` or `OTEL_LOGS_EXPORTER` is set in `.env`: Jaeger stores traces only, so leave them unset there |
 | `WARNING: Your kernel does not support memory limit capabilities` | the host kernel has the memory cgroup disabled; the app runs but the 3 GB cap is not enforced |
 | `pip` dependency conflict | the OTEL packages must stay in lockstep (core `1.N` ↔ contrib `0.(N+21)b0`); do not pin one without the others. `make lock` resolves a consistent set |

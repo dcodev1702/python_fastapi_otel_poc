@@ -24,6 +24,10 @@ services:
       # link uses LAN_IP from .env when it is set, so it opens from any machine on your LAN; otherwise
       # localhost, which works in a browser on this host. Set TRACE_UI_URL in .env to override it entirely.
       TRACE_UI_URL: ${TRACE_UI_URL:-http://${LAN_IP:-localhost}:16686/trace/{trace_id}}
+      # Record WHAT was said, not just that a call happened: prompts, model output, tool arguments and results, as
+      # GenAI semantic-convention attributes on the spans (Jaeger's GenAI view reads them). Content can be large and
+      # sensitive, so console mode leaves it off; set it to NO_CONTENT in .env to switch it off here too.
+      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: ${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-SPAN_ONLY}
     depends_on:
       jaeger:
         condition: service_started

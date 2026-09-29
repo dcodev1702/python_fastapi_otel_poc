@@ -5,7 +5,7 @@
 | **Project** | Foundry Learn Agent — FastAPI + OpenTelemetry learning service with an LLM agent that uses the Microsoft Learn MCP server |
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
-| **Version** | 0.4.0 |
+| **Version** | 0.5.0 |
 | **Audience** | (1) the human maintainer; (2) a GenAI assistant **with internet access** that will finish verification |
 
 ---
@@ -42,7 +42,9 @@ Teach the OpenTelemetry (OTEL) pattern in Python by making one REST call produce
 an inbound request, an LLM agent loop, MCP tool calls and LLM calls — and show the same agent two ways so the
 trade-off between *local tools* (visible hops) and *hosted tools* (opaque hop) is visible in a trace viewer.
 Since 0.4.0 the same code also emits the other two OTEL signals, metrics and logs, so a viewer that stores all three
-(the Aspire Dashboard) shows the aggregate view and the event view next to the trace.
+(the Aspire Dashboard) shows the aggregate view and the event view next to the trace. Since 0.5.0 the spans can
+also carry the content itself (opt-in GenAI content capture): the prompt, each message to and from the model, and
+every tool call's arguments and result, so a trace shows *what* was said, not only *that* a call happened.
 
 Non-goals: production hardening, auth, multi-tenancy, persistence, long-term metrics storage (Prometheus, Grafana)
 and log shipping beyond our own logger (listed as next steps only).
@@ -70,7 +72,7 @@ CLIENT child. The Learn calls exist only as `mcp_call` items in the OpenAI respo
 | `requirements/lock.txt` | The pinned set the image installs | Produced by `scripts/lock.sh` (`make lock`, `make lock-upgrade`); never edited by hand |
 | `scripts/lock.sh` | Resolves the lock with `uv pip compile` inside the Dockerfile's base image, then verifies it | Deletes the lock and fails if `HTTPX2ClientInstrumentor` is missing or openai < 3 |
 | `requirements/dev.txt` | `pytest`, `pylint` | Local and CI only; kept out of the image |
-| `tests/conftest.py`, `tests/test_trace_shape.py`, `tests/test_metrics_and_logs.py`, `pytest.ini` | Trace-shape tests, plus metrics and logs tests (§7) | Fake Learn MCP server under the real httpx client, scripted fake OpenAI client, in-memory span exporter, metric reader and log exporter |
+| `tests/conftest.py`, `tests/test_trace_shape.py`, `tests/test_metrics_and_logs.py`, `tests/test_content_capture.py`, `pytest.ini` | Trace-shape tests, plus metrics and logs tests (§7) | Fake Learn MCP server under the real httpx client, scripted fake OpenAI client, in-memory span exporter, metric reader and log exporter |
 | `Makefile` | Shortcuts: `venv`, `check`, `lock`, `up-jaeger`, `up-aspire`, … | `make` lists them |
 | `.github/workflows/ci.yml` | CI: pylint + tests; compose validation, image build, container smoke test | Runs on pushes to `main` and on pull requests; no secrets |
 | `Dockerfile` | `python:3.14.7-slim`, non-root, installs `requirements/lock.txt` (floors with a warning if absent), `pip check`, HEALTHCHECK on `/healthz` | `PYTHONUNBUFFERED=1` so spans + heartbeat reach `docker compose logs` |
@@ -114,9 +116,9 @@ Swagger) carry none. `trace_url` fills the `TRACE_UI_URL` template and is `null`
 
 | Span | Kind | Attributes |
 |---|---|---|
-| `agent.run` | INTERNAL (manual) | `agent.mode`, `gen_ai.request.model`, `agent.tools[]`, `agent.turns`, `agent.tool_calls`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`; `record_exception` on tool failures; event `mcp_call.error` (hosted) |
-| `llm.turn` | INTERNAL (manual) | `agent.turn`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens` |
-| `mcp <method>[ <tool>]` | INTERNAL (manual) | `rpc.system=jsonrpc`, `rpc.method`, `mcp.tool.name`, `mcp.tool.arguments` |
+| `agent.run` | INTERNAL (manual) | `agent.mode`, `gen_ai.operation.name=invoke_agent`, `gen_ai.provider.name=openai`, `gen_ai.request.model`, `agent.tools[]`, `agent.turns`, `agent.tool_calls`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`; `record_exception` on tool failures; event `mcp_call.error` (hosted). Capture on: `gen_ai.input.messages` (the prompt), `gen_ai.output.messages` (the returned brief) |
+| `llm.turn` | INTERNAL (manual) | `agent.turn`, `gen_ai.operation.name=chat`, `gen_ai.provider.name=openai`, `gen_ai.request.model`, `gen_ai.response.model`, `gen_ai.response.id`, `gen_ai.response.finish_reasons` (`tool_call` or `stop`), `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`. Capture on: `gen_ai.system_instructions`, `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.tool.definitions` |
+| `mcp <method>[ <tool>]` | INTERNAL (manual) | `rpc.system=jsonrpc`, `rpc.method`, `mcp.tool.name`, `mcp.tool.arguments`; on `tools/call` also `gen_ai.operation.name=execute_tool`, `gen_ai.tool.name`. Capture on: `gen_ai.tool.call.arguments`, `gen_ai.tool.call.result` (the MCP result, verbatim) |
 | `POST` (httpx / httpx2 auto) | CLIENT | HTTP semconv attrs (old or new names depending on `OTEL_SEMCONV_STABILITY_OPT_IN`) |
 | `<METHOD> <route>` (FastAPI auto) | SERVER | HTTP semconv attrs; children `… http receive` / `… http send` |
 
@@ -149,7 +151,7 @@ On stdout each record prints as `[log] LEVEL message trace_id=<32 hex>` (`-` out
 ### `stats` snapshot (heartbeat line and `/healthz` body)
 
 ```json
-{"status":"ok","service":"foundry-learn-agent","version":"0.4.0","time":"<UTC ISO>","uptime_s":0,
+{"status":"ok","service":"foundry-learn-agent","version":"0.5.0","time":"<UTC ISO>","uptime_s":0,
  "exporter":{"traces":"none|console|otlp[+azure-monitor]","metrics":"none|console|otlp","logs":"none|console|otlp"},
  "model":"gpt-5.6-luna","rss_mb":25.6,
  "requests":{"/path":n},"errors":{"/path":n},"llm_turns":0,"tool_calls":0,
@@ -169,7 +171,8 @@ Nothing in this path may perform I/O that would create a span.
 | `OTEL_TRACES_EXPORTER` | unset | `configure_traces()`: `none` attaches no console/OTLP exporter (`exporter.traces: "none"`); the tests use it |
 | `OTEL_METRICS_EXPORTER` | unset → `none` | `configure_metrics()`: `otlp` or `console` installs a `MeterProvider`; `none` installs nothing (instruments stay no-ops) |
 | `OTEL_LOGS_EXPORTER` | unset → `none` | `configure_logs()`: `otlp` or `console` installs a `LoggerProvider`; stdout `[log]` lines print regardless |
-| `OTEL_METRIC_EXPORT_INTERVAL` | `60000` (ms) | the SDK's `PeriodicExportingMetricReader`; `compose.aspire.yaml` sets `10000` |
+| `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` | unset → off; `SPAN_ONLY` in the Jaeger and Aspire overrides (overridable) | `capture_content()`, read on every call: `SPAN_ONLY`, `SPAN_AND_EVENT` or `true` record content on spans; `NO_CONTENT`/`EVENT_ONLY`/unset do not |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `60000` (ms) | the SDK's `PeriodicExportingMetricReader`; `compose.aspire.yaml` passes `${OTEL_METRIC_EXPORT_INTERVAL:-10000}` |
 | `TRACE_UI_URL` | unset → `trace_url: null`; the Jaeger and Aspire overrides set it (`LAN_IP` or `localhost`) | `trace_url_for()`, read on every call |
 | `OTEL_PYTHON_FASTAPI_EXCLUDED_URLS` | `docs,openapi.json,redoc,healthz` | `EXCLUDED_URLS` |
 | `HEALTHZ_INTERVAL_SECONDS` | `60` | `HEALTHZ_INTERVAL_SECONDS` |
@@ -236,6 +239,15 @@ Nothing in this path may perform I/O that would create a span.
     `opentelemetry-instrumentation-logging` `LoggingHandler` stamps each record with the current trace and span
     ids and turns `extra={...}` into attributes; the SDK's own `LoggingHandler` is deprecated in 1.45. The same
     records print on stdout ending in `trace_id=…`, so even console mode correlates.
+16. **Content capture: opt-in, on the spans, in the GenAI format.** HTTP instrumentation never records bodies, so
+    a trace shows that calls happened but not what was said. `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`
+    (the variable other GenAI instrumentations read) switches it on. The content is recorded as JSON strings in
+    the semantic conventions' message format, because span attributes can't hold structures yet. That lets
+    Jaeger's GenAI View and Aspire's GenAI details render it as a conversation. It's opt-in because content is
+    large (~100 KB per `/ask`) and can be sensitive. The viewer overrides default it on, because seeing the data
+    is the point of a local learning setup, and console mode leaves it off, because every call would print tens
+    of KB. Hosted MCP calls become `server_tool_call` / `server_tool_call_response` parts, so the opaque hop's
+    content is visible even though its timing is not. No truncation and no events (`EVENT_ONLY`) yet.
 
 ## 6. VERIFICATION CHECKLIST — assumptions made without internet access
 
@@ -276,6 +288,7 @@ Legend: **Assumed** = what the code believes · **Where** = file:symbol · **Ver
 | T7 | `trace.get_tracer_provider().shutdown()` flushes `BatchSpanProcessor`. | `lifespan` | SDK docs | Use `provider.force_flush()` then `shutdown()`. |
 | T8 | `HTTPXClientInstrumentor().instrument()` patches the real transport class (`httpx.AsyncHTTPTransport.handle_async_request`), not `httpx.MockTransport`; `HTTPXClientInstrumentor.instrument_client(client)` wraps any client's transport with the same wrapper. **Verified 2026-09-29** (instrumentation 0.66b0): the test fixture instruments its MockTransport client this way, and the tests see real CLIENT spans and injected `traceparent`. | `tests/conftest.py` `client` | `pytest -q` (the `/tools` and `/ask` tests) | If CLIENT spans disappear after an upgrade, check how `instrument()` / `instrument_client()` patch in the new release. |
 | T9 | Metrics and logs API/SDK in 1.45: `MeterProvider` + `PeriodicExportingMetricReader` (honours `OTEL_METRIC_EXPORT_INTERVAL`), `LoggerProvider` + `BatchLogRecordProcessor` in `opentelemetry.sdk._logs`, `OTLPMetricExporter` / `OTLPLogExporter` in the OTLP-HTTP exporter package, `create_histogram(..., explicit_bucket_boundaries_advisory=...)`; instruments and handlers created before a provider is installed are upgraded when it is. The SDK's `LoggingHandler` is deprecated: use `opentelemetry.instrumentation.logging.handler.LoggingHandler` (0.66b0). **Verified 2026-09-29** with a probe, the tests (run with DeprecationWarning as an error) and a live Aspire run. | `configure_metrics()`, `configure_logs()`, `configure_logging()`, instruments in §1 | `pytest -q -W error::DeprecationWarning` | Follow the renames the deprecation warnings name. |
+| T10 | GenAI content attributes and their JSON formats: `gen_ai.system_instructions`, `gen_ai.input.messages`, `gen_ai.output.messages` (roles; parts `text`, `tool_call`, `tool_call_response`, `server_tool_call`, `server_tool_call_response`, `reasoning`; `finish_reason`), `gen_ai.tool.definitions`, `gen_ai.tool.call.arguments` / `.result`, recorded as JSON strings on spans; the opt-in variable `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` (`NO_CONTENT`, `SPAN_ONLY`, `EVENT_ONLY`, `SPAN_AND_EVENT`). **Verified 2026-09-29** against open-telemetry/semantic-conventions-genai (the GenAI conventions moved there; `docs/gen-ai/gen-ai-spans.md`, `docs/gen-ai/non-normative/models.py`) and `opentelemetry-util-genai`'s README; live, Jaeger's GenAI View renders the Conversation and Aspire's GenAI details the Input & output. | `capture_content()`, `item_parts()`, `input_messages()`, `output_messages()`, `create_response()`, `McpClient._rpc` | `pytest tests/test_content_capture.py`; one live run | Follow the conventions repo: attribute names and part types are still marked Development. |
 
 ### 6.4 Step 4 — Azure Monitor (commented code; verify so it works when uncommented)
 
@@ -314,7 +327,7 @@ Prereqs: Docker on Linux, `.env` with a valid `OPENAI_API_KEY`. Run the offline 
 ```bash
 # -1. Offline: lint + trace-shape tests (no network, no key, no tokens)
 make venv && make check
-#    EXPECT: pylint 10.00/10 for app.py and tests; "20 passed"
+#    EXPECT: pylint 10.00/10 for app.py and tests; "29 passed"
 
 # 0. Build + start (console mode)
 cp .env.example .env && $EDITOR .env
@@ -357,7 +370,10 @@ docker compose down && docker compose -f compose.yaml -f compose.jaeger.yaml up 
 #    repeat steps 4 and 5, then click each response's trace_url (or open http://localhost:16686 -> service
 #    foundry-learn-agent) and compare the two traces
 #    EXPECT: trace_url opens that trace; /ask trace has many child spans (mcp ..., llm.turn, POST) and every mcp ... and
-#            llm.turn span has one POST child; /ask-hosted trace has agent.run -> llm.turn -> one POST
+#            llm.turn span has one POST child; /ask-hosted trace has agent.run -> llm.turn -> one POST.
+#            Content capture (on by default here): GenAI View -> the last llm.turn -> Conversation shows SYSTEM,
+#            USER, ASSISTANT (-> tool call), TOOL (<- Learn's result) and the final ASSISTANT answer; the
+#            /ask-hosted llm.turn lists OpenAI's Learn calls as server tool calls with their output
 
 # 8. Who can connect (Jaeger mode still running)
 ss -ltn | grep -E ':(8000|16686|4318) '
@@ -387,7 +403,7 @@ docker compose -f compose.yaml -f compose.jaeger.yaml up -d --remove-orphans
 - Not verified: anything involving a real network call, real package versions, real container runtime.
 - Since 0.3.0 the `tests/` suite automates most of the stub checks above against the real libraries (the fakes sit
   below the real FastAPI and httpx instrumentation), and CI runs it on every push. Since 0.4.0 it also covers the
-  metrics and the log records (20 tests).
+  metrics and the log records, and since 0.5.0 content capture (29 tests).
 
 ## 9. Extension points (after verification)
 
@@ -398,5 +414,8 @@ docker compose -f compose.yaml -f compose.jaeger.yaml up -d --remove-orphans
 3. **Distributed tracing demo** — a second tiny FastAPI service that the agent calls; the injected `traceparent`
    makes both services appear in one Jaeger trace.
 4. **Azure Monitor (Step 4)** — uncomment; the same spans appear in Application Insights.
-5. **GenAI semantic conventions** — replace the ad-hoc `gen_ai.*`/`agent.*` attributes with the official
-   `gen_ai.*` conventions once stable, or adopt an OpenAI instrumentation package.
+5. **GenAI semantic conventions, the rest** — 0.5.0 adopted the operation, provider, response and content attributes
+   on our spans. Still ours: the span names (`llm.turn` rather than `chat gpt-5.6-luna`), the `agent.*` attributes
+   and INTERNAL rather than CLIENT kind. An OpenAI instrumentation package could replace the manual `llm.turn`.
+6. **Content, grown up** — truncate long tool results, emit content as log events (`EVENT_ONLY`), or upload it
+   to storage with a hook, as the conventions describe, before any shared deployment.

@@ -14,7 +14,7 @@ Description : A small FastAPI service for learning OpenTelemetry (OTEL) end to e
 
 Author      : dcodev1702 & M365 Copilot / Cowork
 Created     : 2026-09-28
-Version     : 0.4.0
+Version     : 0.5.0
 Python      : 3.14.7+
 Run (local) : uvicorn app:app --reload                                  -> http://127.0.0.1:8000/docs
 Run (Docker): docker compose up --build                                 -> http://localhost:8000/docs
@@ -106,7 +106,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 from pydantic import BaseModel, ConfigDict, Field
 
 SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "foundry-learn-agent")
-SERVICE_VERSION = "0.4.0"
+SERVICE_VERSION = "0.5.0"
 
 # =============================================================================
 # 1. OPENTELEMETRY SETUP - three signals
@@ -317,6 +317,23 @@ meter.create_observable_up_down_counter(
 )
 
 
+# GenAI CONTENT CAPTURE (opt-in). HTTP instrumentation never records request or response bodies, and our own spans
+# stop at counts - so a trace shows THAT the app talked to OpenAI and Microsoft Learn, not WHAT was said. The GenAI
+# semantic conventions define opt-in attributes for the content itself: the system instructions, every message sent
+# to the model and returned by it, and each tool call's arguments and result. It is off by default because content
+# is large (one /ask records well over 100 KB) and can be sensitive; the Jaeger and Aspire overrides switch it on.
+def capture_content() -> bool:
+    """OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY (or SPAN_AND_EVENT, or true) records content on
+    spans. Read on every call, so the tests can switch it; events (EVENT_ONLY) are not implemented here."""
+    value = os.getenv("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "").strip().lower()
+    return value in {"span_only", "span_and_event", "true"}
+
+
+def as_json(value: Any) -> str:
+    """Span attributes cannot hold nested structures yet, so the conventions record content as a JSON string."""
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
 # =============================================================================
 # 2. MICROSOFT LEARN MCP CLIENT
 #
@@ -371,6 +388,10 @@ class McpClient:
             if method == "tools/call" and params:
                 span.set_attribute("mcp.tool.name", params["name"])
                 span.set_attribute("mcp.tool.arguments", json.dumps(params.get("arguments", {})))
+                span.set_attribute("gen_ai.operation.name", "execute_tool")  # GenAI views show it as a tool call
+                span.set_attribute("gen_ai.tool.name", params["name"])
+                if capture_content():
+                    span.set_attribute("gen_ai.tool.call.arguments", as_json(params.get("arguments", {})))
 
             headers = {"Accept": "application/json, text/event-stream"}
             if self._session_id:
@@ -385,6 +406,8 @@ class McpClient:
             message = self._parse(response)
             if "error" in message:
                 raise RuntimeError(f"MCP {method} failed: {message['error']}")
+            if method == "tools/call" and capture_content():
+                span.set_attribute("gen_ai.tool.call.result", as_json(message["result"]))  # the data Learn sent back
             return message["result"]
 
     @staticmethod
@@ -527,6 +550,67 @@ def parse_arguments(raw: str | None) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {"_value": parsed}
 
 
+def item_parts(item: Any) -> list[dict[str, Any]]:
+    """One Responses API item as GenAI message parts: a tool call, a hosted MCP call with its result, text or
+    reasoning. Bookkeeping items such as mcp_list_tools carry no content worth recording."""
+    if item.type == "function_call":
+        arguments = parse_arguments(item.arguments)
+        return [{"type": "tool_call", "id": item.call_id, "name": item.name, "arguments": arguments}]
+    if item.type == "mcp_call":  # OpenAI ran this tool against Learn for us (/ask-hosted): the call AND its result
+        call_id = getattr(item, "id", None)
+        call = {"type": "mcp", "arguments": parse_arguments(item.arguments)}
+        result = {"type": "mcp", "output": item.output, "error": item.error}
+        return [
+            {"type": "server_tool_call", "id": call_id, "name": item.name, "server_tool_call": call},
+            {"type": "server_tool_call_response", "id": call_id, "server_tool_call_response": result},
+        ]
+    if item.type == "message":
+        return [{"type": "text", "content": part.text} for part in getattr(item, "content", None) or []
+                if getattr(part, "text", None)]
+    if item.type == "reasoning":
+        summary = " ".join(part.text for part in getattr(item, "summary", None) or [] if getattr(part, "text", None))
+        return [{"type": "reasoning", "content": summary}] if summary else []
+    return []
+
+
+def input_messages(request_input: Any) -> list[dict[str, Any]]:
+    """What the model was sent, as GenAI messages: the user prompt, then each earlier turn's tool calls (assistant)
+    and their results (tool) - the conversation the local loop grows turn by turn."""
+    if isinstance(request_input, str):  # /ask-hosted sends the prompt as a plain string
+        return [{"role": "user", "parts": [{"type": "text", "content": request_input}]}]
+    messages: list[dict[str, Any]] = []
+    for item in request_input:
+        if isinstance(item, dict) and "role" in item:  # the user prompt
+            messages.append({"role": item["role"], "parts": [{"type": "text", "content": item["content"]}]})
+        elif isinstance(item, dict):  # a function_call_output we appended: a tool result going back to the model
+            response = {"type": "tool_call_response", "id": item["call_id"], "response": item["output"]}
+            messages.append({"role": "tool", "parts": [response]})
+        elif parts := item_parts(item):  # the model's own earlier output, fed back verbatim
+            if messages and messages[-1]["role"] == "assistant":
+                messages[-1]["parts"].extend(parts)  # one assistant message per turn, not one per item
+            else:
+                messages.append({"role": "assistant", "parts": parts})
+    return messages
+
+
+def output_messages(response: Any) -> list[dict[str, Any]]:
+    """What the model returned, as one GenAI output message: the tool calls it asks for, hosted calls, final text."""
+    parts = [part for item in response.output for part in item_parts(item)]
+    if response.output_text and not any(part["type"] == "text" for part in parts):
+        parts.append({"type": "text", "content": response.output_text})
+    finish_reason = "tool_call" if any(part["type"] == "tool_call" for part in parts) else "stop"
+    return [{"role": "assistant", "parts": parts, "finish_reason": finish_reason}]
+
+
+def tool_definitions(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The tools offered to the model: function tools built from MCP tools/list, or the hosted MCP tool."""
+    return [
+        {"type": tool["type"], "name": tool.get("name") or tool.get("server_label"),
+         **{key: tool[key] for key in ("description", "parameters", "server_url") if key in tool}}
+        for tool in tools
+    ]
+
+
 def record_usage(span: trace.Span, response: Any, totals: TokenUsage, mode: AgentMode) -> None:
     """Tokens are money: stamp them on the llm.turn span, total them per request and per process, and record them
     in the gen_ai.client.token.usage histogram - one data point per token type."""
@@ -547,12 +631,22 @@ def record_usage(span: trace.Span, response: Any, totals: TokenUsage, mode: Agen
 async def create_response(openai_client: AsyncOpenAI, mode: AgentMode, **request: Any) -> Any:
     """One LLM call with the shared prompt and output contract, timed into gen_ai.client.operation.duration.
 
-    A failed call is timed too, with `error.type` set to the exception's class, so failures show up in the metric.
+    It also describes the call on the current span (llm.turn) in GenAI terms - operation, provider, models, finish
+    reason - and, with content capture on, records exactly what was sent and what came back. A failed call is timed
+    too, with `error.type` set to the exception's class, so failures show up in the metric.
     """
     attributes = {"gen_ai.request.model": OPENAI_MODEL, "agent.mode": mode}
+    span = trace.get_current_span()
+    span.set_attribute("gen_ai.operation.name", "chat")
+    span.set_attribute("gen_ai.provider.name", "openai")
+    span.set_attribute("gen_ai.request.model", OPENAI_MODEL)
+    if capture_content():
+        span.set_attribute("gen_ai.system_instructions", as_json([{"type": "text", "content": SYSTEM_PROMPT}]))
+        span.set_attribute("gen_ai.input.messages", as_json(input_messages(request["input"])))
+        span.set_attribute("gen_ai.tool.definitions", as_json(tool_definitions(request.get("tools", []))))
     started = time.perf_counter()
     try:
-        return await openai_client.responses.create(
+        response = await openai_client.responses.create(
             model=OPENAI_MODEL, instructions=SYSTEM_PROMPT, text=BRIEF_TEXT_FORMAT, **request
         )
     except Exception as exc:
@@ -560,6 +654,15 @@ async def create_response(openai_client: AsyncOpenAI, mode: AgentMode, **request
         raise
     finally:
         llm_duration.record(time.perf_counter() - started, attributes)
+    for key, value in (("gen_ai.response.id", getattr(response, "id", None)),
+                       ("gen_ai.response.model", getattr(response, "model", None))):
+        if value:
+            span.set_attribute(key, value)
+    messages = output_messages(response)
+    span.set_attribute("gen_ai.response.finish_reasons", [messages[0]["finish_reason"]])
+    if capture_content():
+        span.set_attribute("gen_ai.output.messages", as_json(messages))
+    return response
 
 
 async def run_tool(
@@ -602,12 +705,25 @@ def finish_run(  # pylint: disable=too-many-arguments,too-many-positional-argume
     span.set_attribute("gen_ai.usage.input_tokens", usage.input_tokens)
     span.set_attribute("gen_ai.usage.output_tokens", usage.output_tokens)
     stats.tool_calls += len(records)
+    if capture_content():  # the answer that goes back to the API caller, on the span that covers the whole run
+        answer = {"role": "assistant", "parts": [{"type": "text", "content": brief.model_dump_json()}]}
+        span.set_attribute("gen_ai.output.messages", as_json([{**answer, "finish_reason": "stop"}]))
     log.info(
         "agent.run finished: turns=%d tool_calls=%d input_tokens=%d output_tokens=%d",
         turns, len(records), usage.input_tokens, usage.output_tokens,
         extra={"agent.mode": mode, "agent.turns": turns, "agent.tool_calls": len(records)},
     )
     return AgentResult(mode=mode, brief=brief, turns=turns, usage=usage, tool_calls=records)
+
+
+def describe_agent_run(span: trace.Span, mode: AgentMode, user_prompt: str) -> None:
+    """Stamp the agent.run span: our attributes, the GenAI invoke_agent ones and - with capture on - the prompt."""
+    span.set_attribute("agent.mode", mode)
+    span.set_attribute("gen_ai.operation.name", "invoke_agent")
+    span.set_attribute("gen_ai.provider.name", "openai")
+    span.set_attribute("gen_ai.request.model", OPENAI_MODEL)
+    if capture_content():
+        span.set_attribute("gen_ai.input.messages", as_json(input_messages(user_prompt)))
 
 
 # pylint: disable-next=too-many-locals  # the whole tool loop reads top to bottom on purpose
@@ -620,8 +736,7 @@ async def run_agent(openai_client: AsyncOpenAI, mcp: McpClient, user_prompt: str
     it ERROR before re-raising - no extra code needed.
     """
     with tracer.start_as_current_span("agent.run") as span:
-        span.set_attribute("agent.mode", "local-tools")
-        span.set_attribute("gen_ai.request.model", OPENAI_MODEL)
+        describe_agent_run(span, "local-tools", user_prompt)
         log.info("agent.run started: local tools, model %s", OPENAI_MODEL, extra={"agent.mode": "local-tools"})
 
         await mcp.initialize()
@@ -661,8 +776,7 @@ async def run_agent_hosted(openai_client: AsyncOpenAI, user_prompt: str) -> Agen
     surface as tool_calls (without a duration) so the two modes stay comparable in the API and in Jaeger.
     """
     with tracer.start_as_current_span("agent.run") as span:
-        span.set_attribute("agent.mode", "hosted-mcp")
-        span.set_attribute("gen_ai.request.model", OPENAI_MODEL)
+        describe_agent_run(span, "hosted-mcp", user_prompt)
         log.info("agent.run started: hosted MCP, model %s", OPENAI_MODEL, extra={"agent.mode": "hosted-mcp"})
         usage = TokenUsage()
 

@@ -26,7 +26,11 @@ services:
       # default of 60 s, so the charts move while you watch.
       OTEL_METRICS_EXPORTER: otlp
       OTEL_LOGS_EXPORTER: otlp
-      OTEL_METRIC_EXPORT_INTERVAL: "10000"
+      OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-10000}
+      # Record WHAT was said, not just that a call happened: prompts, model output, tool arguments and results, as
+      # GenAI semantic-convention attributes on the spans. Aspire's GenAI visualizer shows them as a conversation.
+      # Set it to NO_CONTENT in .env to switch it off.
+      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: ${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-SPAN_ONLY}
       # The trace_url link: LAN_IP from .env when set, so it opens from any machine on your LAN; else localhost.
       TRACE_UI_URL: ${TRACE_UI_URL:-http://${LAN_IP:-localhost}:18888/traces/detail/{trace_id}}
     depends_on:

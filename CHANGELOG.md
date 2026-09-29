@@ -7,6 +7,46 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-29
+
+See the data to and from the model: opt-in GenAI content capture puts the prompts, the model's replies and every
+tool call's arguments and result on the spans, so a trace shows *what* was said as well as *that* a call happened.
+Before this, the HTTP instrumentation recorded only method, URL, status and timing, never bodies, and our own spans
+stopped at counts.
+
+### Added
+
+- **GenAI content capture**, switched on with `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY` (the
+  variable other GenAI instrumentations read). The attributes use the GenAI semantic conventions' JSON message
+  format:
+  - `llm.turn`: `gen_ai.system_instructions`, `gen_ai.input.messages` (the whole conversation sent, tool results
+    included), `gen_ai.output.messages` (tool calls requested or the final answer) and `gen_ai.tool.definitions`;
+  - `mcp tools/call <tool>`: `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result`, exactly what Learn returned;
+  - `agent.run`: the user prompt, and the brief returned to the caller.
+
+  Jaeger's **GenAI View** shows it as a Conversation, and Aspire's **GenAI details** dialog as Input & output. For
+  `/ask-hosted`, OpenAI's Learn calls appear as `server_tool_call` parts with their output, so the opaque hop's
+  content is visible, though still not its timing.
+- **GenAI metadata on our spans**, whether or not capture is on:
+  - `gen_ai.operation.name`: `invoke_agent`, `chat` or `execute_tool`;
+  - `gen_ai.provider.name`: `openai`;
+  - `gen_ai.response.model`, `gen_ai.response.id`, `gen_ai.response.finish_reasons` and `gen_ai.tool.name`.
+- `tests/test_content_capture.py`: 9 tests for the switch's values, no content by default, and the exact message
+  format of both agent loops (29 tests in total).
+- README: a *See the data to and from the model* section, "Try it" step 8, exercise 12, a configuration row and a
+  troubleshooting row. `design.md`: the content contracts, decision 16, checklist item T10 and the acceptance
+  expectations.
+
+### Changed
+
+- The Jaeger and Aspire overrides set `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY` by default. Set
+  `NO_CONTENT` in `.env` to turn it off. Console mode and CI leave it off, because every call would print tens of KB.
+- `compose.aspire.yaml` reads `OTEL_METRIC_EXPORT_INTERVAL` from `.env` (default 10000), so the interval is tuned in
+  one place. `.env.example` now warns not to set `OTEL_METRICS_EXPORTER` / `OTEL_LOGS_EXPORTER` to `otlp` there:
+  `.env` reaches the container in every mode, and Jaeger answers those endpoints with 404.
+- `create_response()` describes each LLM call on its `llm.turn` span, and a new `describe_agent_run()` stamps
+  `agent.run`. The prompts, the output schema and the hosted MCP tool sent to OpenAI are unchanged.
+
 ## [0.4.0] - 2026-09-29
 
 The other two OpenTelemetry signals: metrics and structured logs, next to the traces. The Aspire Dashboard override
@@ -246,7 +286,8 @@ Initial version, written offline; `design.md` §6 lists the external contracts t
   - the `compose.jaeger.yaml` override that adds Jaeger.
 - `README.md`, a walkthrough, and `design.md`, the design notes and verification checklist.
 
-[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/dcodev1702/python_fastapi_otel_poc/compare/v0.2.3...v0.2.4
