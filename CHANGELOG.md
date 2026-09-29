@@ -7,6 +7,11 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
+### Changed
+
+- Local runs are documented for Python 3.14.7 or newer, the version the container and the `.venv` use: the
+  README's "Runs on" row and Prerequisites, and the `app.py` header.
+
 ## [0.2.4] - 2026-09-28
 
 ### Added

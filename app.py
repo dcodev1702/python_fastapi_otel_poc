@@ -12,7 +12,7 @@ Description : A small FastAPI service for learning OpenTelemetry (OTEL) end to e
 Author      : dcodev1702 & M365 Copilot / Cowork
 Created     : 2026-09-28
 Version     : 0.2.4
-Python      : 3.11+
+Python      : 3.14.7+
 Run (local) : uvicorn app:app --reload                                  -> http://127.0.0.1:8000/docs
 Run (Docker): docker compose up --build                                 -> http://localhost:8000/docs
               docker compose -f compose.yaml -f compose.jaeger.yaml up --build   (+ Jaeger UI on :16686)

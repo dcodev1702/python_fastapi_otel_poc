@@ -5,7 +5,7 @@
 | **Author** | dcodev1702 & M365 Copilot / Cowork |
 | **Created** | 2026-09-28 |
 | **Version** | 0.2.4 |
-| **Runs on** | Python 3.11+ locally, or Docker Compose on Linux (container capped at 3 GB RAM) |
+| **Runs on** | Python 3.14.7+ locally, or Docker Compose on Linux (container capped at 3 GB RAM) |
 
 A small, runnable service for learning how OpenTelemetry (OTEL) tracing works in a Python API that drives an
 LLM agent. One `POST /ask` produces **one trace** with a dozen-plus nested spans: the inbound HTTP request, the
@@ -62,7 +62,7 @@ Where each piece runs and what talks to what; the numbered flows are explained i
 - An OpenAI API key.
 - Outbound internet access to `learn.microsoft.com` and `api.openai.com`.
 - **Docker route:** Docker Engine + Compose v2 on Linux (`docker compose version`).
-- **Local route:** Python 3.11 or newer.
+- **Local route:** Python 3.14.7 or newer, the version the container runs.
 
 ## Run it with Docker Compose (Linux)
 
