@@ -7,6 +7,11 @@ only when the application's behaviour changes (`design.md` §0).
 
 ## [Unreleased]
 
+### Changed
+
+- `.env.example`: the commented examples show a LAN address placeholder (`LAN_IP=192.168.10.XXX`) and content
+  capture switched on (`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY`), with blank lines between groups.
+
 ## [0.5.0] - 2026-09-29
 
 See the data to and from the model: opt-in GenAI content capture puts the prompts, the model's replies and every
